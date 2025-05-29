@@ -1,0 +1,60 @@
+$TTL 3600
+$ORIGIN 7gram.xyz.
+
+; Main domain
+@                           IN    A     100.86.22.59
+www                         IN    A     100.86.22.59
+
+; Authentication service
+auth                        IN    A     100.86.22.59
+
+; Media services
+emby                        IN    A     100.86.22.59
+jellyfin                    IN    A     100.86.22.59
+plex                        IN    A     100.86.22.59
+
+; Book services
+abs                         IN    A     100.86.22.59
+calibre                     IN    A     100.86.22.59
+calibreweb                  IN    A     100.86.22.59
+
+; Media download services
+youtube                     IN    A     100.86.22.59
+
+; AI services
+ai                          IN    A     100.86.22.59
+chat                        IN    A     100.86.22.59
+ollama                      IN    A     100.86.22.59
+
+; Family services
+mealie                      IN    A     100.86.22.59
+grocy                       IN    A     100.86.22.59
+wiki                        IN    A     100.86.22.59
+
+; Admin services - Media management
+sonarr                      IN    A     100.86.22.59
+radarr                      IN    A     100.86.22.59
+lidarr                      IN    A     100.86.22.59
+audiobooks                  IN    A     100.86.22.59
+ebooks                      IN    A     100.86.22.59
+prowlarr                    IN    A     100.86.22.59
+jackett                     IN    A     100.86.22.59
+
+; Admin services - Download and utilities
+qbt                         IN    A     100.86.22.59
+filebot                     IN    A     100.86.22.59
+duplicati                   IN    A     100.86.22.59
+
+; System services
+home                        IN    A     100.86.22.59
+pihole                      IN    A     100.86.22.59
+dns                         IN    A     100.86.22.59
+homarr                      IN    A     100.86.22.59
+
+; Syncthing instances
+sync-freddy                 IN    A     100.86.22.59
+sync-sullivan               IN    A     100.86.22.59
+sync-desktop                IN    A     100.86.22.59
+sync-oryx                   IN    A     100.86.22.59
+
+; End of zone file
