@@ -2,59 +2,61 @@ $TTL 3600
 $ORIGIN 7gram.xyz.
 
 ; Main domain
-@                           IN    A     100.86.22.59
-www                         IN    A     100.86.22.59
+@                           IN    A     100.121.199.80
+www                         IN    A     100.121.199.80
 
 ; Authentication service
-auth                        IN    A     100.86.22.59
+auth                        IN    A     100.121.199.80
 
 ; Media services
-emby                        IN    A     100.86.22.59
-jellyfin                    IN    A     100.86.22.59
-plex                        IN    A     100.86.22.59
+emby                        IN    A     100.121.199.80
+jellyfin                    IN    A     100.121.199.80
+plex                        IN    A     100.121.199.80
 
 ; Book services
-abs                         IN    A     100.86.22.59
-calibre                     IN    A     100.86.22.59
-calibreweb                  IN    A     100.86.22.59
+abs                         IN    A     100.121.199.80
+calibre                     IN    A     100.121.199.80
+calibreweb                  IN    A     100.121.199.80
+
+mealie                      IN    A     100.121.199.80
+grocy                       IN    A     100.121.199.80
+wiki                        IN    A     100.121.199.80
 
 ; Media download services
-youtube                     IN    A     100.86.22.59
+youtube                     IN    A     100.121.199.80
 
 ; AI services
-ai                          IN    A     100.86.22.59
-chat                        IN    A     100.86.22.59
-ollama                      IN    A     100.86.22.59
-
-; Family services
-mealie                      IN    A     100.86.22.59
-grocy                       IN    A     100.86.22.59
-wiki                        IN    A     100.86.22.59
+ai                          IN    A     100.121.199.80
+chat                        IN    A     100.121.199.80
+ollama                      IN    A     100.121.199.80
 
 ; Admin services - Media management
-sonarr                      IN    A     100.86.22.59
-radarr                      IN    A     100.86.22.59
-lidarr                      IN    A     100.86.22.59
-audiobooks                  IN    A     100.86.22.59
-ebooks                      IN    A     100.86.22.59
-prowlarr                    IN    A     100.86.22.59
-jackett                     IN    A     100.86.22.59
+sonarr                      IN    A     100.121.199.80
+radarr                      IN    A     100.121.199.80
+lidarr                      IN    A     100.121.199.80
+audiobooks                  IN    A     100.121.199.80
+ebooks                      IN    A     100.121.199.80
+jackett                     IN    A     100.121.199.80
 
 ; Admin services - Download and utilities
-qbt                         IN    A     100.86.22.59
-filebot                     IN    A     100.86.22.59
-duplicati                   IN    A     100.86.22.59
+qbt                         IN    A     100.121.199.80
+filebot                     IN    A     100.121.199.80
+duplicati                   IN    A     100.121.199.80
 
 ; System services
-home                        IN    A     100.86.22.59
-pihole                      IN    A     100.86.22.59
-dns                         IN    A     100.86.22.59
-homarr                      IN    A     100.86.22.59
+home                        IN    A     100.121.199.80
+pihole                      IN    A     100.121.199.80
+dns                         IN    A     100.121.199.80
+homarr                      IN    A     100.121.199.80
 
 ; Syncthing instances
-sync-freddy                 IN    A     100.86.22.59
-sync-sullivan               IN    A     100.86.22.59
-sync-desktop                IN    A     100.86.22.59
-sync-oryx                   IN    A     100.86.22.59
+sync-freddy                 IN    A     100.121.199.80
+sync-sullivan               IN    A     100.121.199.80
+sync-desktop                IN    A     100.121.199.80
+sync-oryx                   IN    A     100.121.199.80
+
+; Portainer instances
+portainer-freddy            IN    A     100.121.199.80
+portainer-sullivan          IN    A     100.121.199.80
 
 ; End of zone file

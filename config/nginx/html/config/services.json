@@ -1,0 +1,197 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-29T00:00:00Z",
+  "categories": {
+    "media": {
+      "name": "Media Services",
+      "icon": "🎬",
+      "color": "media",
+      "priority": 1
+    },
+    "ai": {
+      "name": "AI Services", 
+      "icon": "🤖",
+      "color": "ai",
+      "priority": 2
+    },
+    "admin": {
+      "name": "Media Management",
+      "icon": "⚙️", 
+      "color": "admin",
+      "priority": 3
+    },
+    "system": {
+      "name": "System Services",
+      "icon": "🛠️",
+      "color": "system", 
+      "priority": 4
+    }
+  },
+  "services": [
+    {
+      "id": "emby",
+      "name": "Emby",
+      "description": "Premium media server for movies, TV shows, and music",
+      "url": "https://emby.7gram.xyz",
+      "category": "Media Services",
+      "icon": "🎬",
+      "type": "Media Server",
+      "version": "4.8.8",
+      "buttonText": "🎬 Open Emby",
+      "tags": ["media", "streaming", "movies", "tv"],
+      "priority": 10,
+      "healthCheck": "https://emby.7gram.xyz/health"
+    },
+    {
+      "id": "jellyfin", 
+      "name": "Jellyfin",
+      "description": "Free and open-source media server alternative",
+      "url": "https://jellyfin.7gram.xyz",
+      "category": "Media Services",
+      "icon": "📺",
+      "type": "Media Server",
+      "buttonText": "📺 Open Jellyfin", 
+      "tags": ["media", "streaming", "opensource"],
+      "priority": 9,
+      "healthCheck": "https://jellyfin.7gram.xyz/health"
+    },
+    {
+      "id": "plex",
+      "name": "Plex", 
+      "description": "Popular streaming media server with extensive features",
+      "url": "https://plex.7gram.xyz",
+      "category": "Media Services",
+      "icon": "🍿",
+      "type": "Media Server",
+      "buttonText": "🍿 Open Plex",
+      "tags": ["media", "streaming", "plex"],
+      "priority": 8,
+      "healthCheck": "https://plex.7gram.xyz/web"
+    },
+    {
+      "id": "audiobookshelf",
+      "name": "Audiobookshelf",
+      "description": "Self-hosted audiobook and podcast server", 
+      "url": "https://abs.7gram.xyz",
+      "category": "Media Services",
+      "icon": "🎧",
+      "type": "Audiobook Server",
+      "buttonText": "🎧 Open Audiobookshelf",
+      "tags": ["audiobooks", "podcasts", "media"],
+      "priority": 7
+    },
+    {
+      "id": "calibre-web",
+      "name": "Calibre Web",
+      "description": "Clean web interface for your e-book library",
+      "url": "https://calibreweb.7gram.xyz", 
+      "category": "Media Services",
+      "icon": "📖",
+      "type": "E-book Server",
+      "buttonText": "📖 Open Calibre Web",
+      "tags": ["ebooks", "calibre", "reading"],
+      "priority": 6
+    },
+    {
+      "id": "youtube-dl",
+      "name": "YouTube Downloader",
+      "description": "Download and manage videos from YouTube and other platforms",
+      "url": "https://youtube.7gram.xyz",
+      "category": "Media Services", 
+      "icon": "📱",
+      "type": "Downloader",
+      "buttonText": "📱 YouTube Downloader",
+      "tags": ["youtube", "download", "video"],
+      "priority": 5
+    },
+    {
+      "id": "openwebui",
+      "name": "Open WebUI",
+      "description": "ChatGPT-like AI interface with multiple model support",
+      "url": "https://ai.7gram.xyz",
+      "category": "AI Services",
+      "icon": "🚀", 
+      "type": "AI Interface",
+      "buttonText": "🚀 Open WebUI",
+      "tags": ["ai", "chat", "llm"],
+      "priority": 10,
+      "healthCheck": "https://ai.7gram.xyz/health"
+    },
+    {
+      "id": "chat-interface",
+      "name": "Chat Interface", 
+      "description": "Alternative AI chat interface",
+      "url": "https://chat.7gram.xyz",
+      "category": "AI Services",
+      "icon": "💬",
+      "type": "AI Chat",
+      "buttonText": "💬 Chat Interface",
+      "tags": ["ai", "chat", "alternative"],
+      "priority": 8
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama API",
+      "description": "Direct access to local AI models via Ollama", 
+      "url": "https://ollama.7gram.xyz",
+      "category": "AI Services",
+      "icon": "🧠",
+      "type": "AI API",
+      "buttonText": "🧠 Ollama API",
+      "tags": ["ai", "api", "ollama", "local"],
+      "priority": 6
+    },
+    {
+      "id": "sonarr",
+      "name": "Sonarr",
+      "description": "Automatic TV series management and monitoring",
+      "url": "https://sonarr.7gram.xyz",
+      "category": "Media Management",
+      "icon": "📺", 
+      "type": "TV Management",
+      "buttonText": "📺 Open Sonarr",
+      "tags": ["tv", "automation", "management"],
+      "priority": 10,
+      "healthCheck": "https://sonarr.7gram.xyz/api/v3/system/status"
+    },
+    {
+      "id": "radarr",
+      "name": "Radarr",
+      "description": "Movie collection manager with automatic downloads",
+      "url": "https://radarr.7gram.xyz", 
+      "category": "Media Management",
+      "icon": "🎬",
+      "type": "Movie Management", 
+      "buttonText": "🎬 Open Radarr",
+      "tags": ["movies", "automation", "management"],
+      "priority": 9,
+      "healthCheck": "https://radarr.7gram.xyz/api/v3/system/status"
+    },
+    {
+      "id": "home-assistant",
+      "name": "Home Assistant",
+      "description": "Complete home automation platform",
+      "url": "https://home.7gram.xyz",
+      "category": "System Services",
+      "icon": "🏠",
+      "type": "Home Automation", 
+      "buttonText": "🏠 Home Assistant",
+      "tags": ["automation", "iot", "smart-home"],
+      "priority": 10,
+      "healthCheck": "https://home.7gram.xyz/api/"
+    },
+    {
+      "id": "portainer",
+      "name": "Portainer", 
+      "description": "Docker container management interface",
+      "url": "https://portainer.7gram.xyz",
+      "category": "System Services",
+      "icon": "🐳",
+      "type": "Container Manager",
+      "buttonText": "🐳 Open Portainer",
+      "tags": ["docker", "containers", "management"],
+      "priority": 8,
+      "healthCheck": "https://portainer.7gram.xyz/api/status"
+    }
+  ]
+}
