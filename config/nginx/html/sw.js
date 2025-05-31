@@ -1,4 +1,4 @@
-// sw.js - Service Worker for 7gram Dashboard PWA
+// sw.js - Service Worker for 7Gram Dashboard PWA
 // Provides offline support and caching
 
 const CACHE_NAME = '7gram-dashboard-v2.1.0';
@@ -23,9 +23,9 @@ const STATIC_ASSETS = [
   '/assets/js/modules/healthChecker.js',
   '/components/header.html',
   '/components/footer.html',
-  '/config/dashboard.json',
-  '/config/services.json',
-  '/config/themes.json',
+  'config/dashboard.json ',
+  'config/services.json',
+  'config/themes.json',
   '/manifest.json'
 ];
 
@@ -282,7 +282,7 @@ function createOfflinePage() {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>7gram Dashboard - Offline</title>
+        <title>7Gram Dashboard - Offline</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           
@@ -371,7 +371,7 @@ function createOfflinePage() {
       </head>
       <body>
         <div class="container">
-          <h1>🏠 7gram Dashboard</h1>
+          <h1>🏠 7Gram Dashboard</h1>
           <h2>📡 You're Offline</h2>
           <p>It looks like you're not connected to the internet. Some features may not be available until your connection is restored.</p>
           <p>Cached content will continue to work offline.</p>
@@ -460,6 +460,6 @@ async function clearAllCaches() {
   }
 }
 
-console.log('🚀 7gram Dashboard Service Worker loaded');
+console.log('🚀 7Gram Dashboard Service Worker loaded');
 console.log('📦 Cache version:', CACHE_NAME);
 console.log('🔧 Features: Offline support, Asset caching, Smart fallbacks');

@@ -1,4 +1,4 @@
-# 🏠 7gram Dashboard - Modular Setup Guide
+# 🏠 7Gram Dashboard - Modular Setup Guide
 
 A beautiful, modular, and dynamic dashboard for managing your home network services with automatic service discovery, health monitoring, and modern design.
 

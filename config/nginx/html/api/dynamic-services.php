@@ -1,6 +1,6 @@
 <?php
 /**
- * Dynamic Services API for 7gram Dashboard
+ * Dynamic Services API for 7Gram Dashboard
  * Handles runtime service registration and management
  */
 

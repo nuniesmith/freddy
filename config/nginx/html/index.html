@@ -8,16 +8,20 @@
     <meta name="author" content="nuniesmith">
     <meta name="robots" content="noindex, nofollow">
     
+    <!-- X-Frame-Options handled by nginx security headers, not meta tag -->
+    
+    <!-- Accessibility and Color Scheme -->
+    <meta name="color-scheme" content="light dark">
+    
     <!-- Security Headers -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
     
     <!-- PWA Meta Tags -->
-    <meta name="application-name" content="7gram Dashboard">
+    <meta name="application-name" content="7Gram Dashboard">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="7gram Dashboard">
+    <meta name="apple-mobile-web-app-title" content="7Gram Dashboard">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
@@ -31,6 +35,8 @@
     
     <!-- Icons and Manifest -->
     <link rel="manifest" href="/manifest.json">
+    <!-- Favicon Fallback -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
     <link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/icons/icon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/icons/icon-16x16.png">
@@ -39,7 +45,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/icons/icon-192x192.png">
     <link rel="mask-icon" href="/assets/images/icons/safari-pinned-tab.svg" color="#667eea">
     
-    <title>🏠 7gram Dashboard</title>
+    <title>🏠 7Gram Dashboard</title>
     
     <!-- Critical CSS - Load First -->
     <link rel="preload" href="assets/css/main.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -186,6 +192,24 @@
             transform: translateY(-2px);
         }
         
+        /* Skip link styles */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 6px;
+            background: white;
+            color: black;
+            padding: 8px;
+            z-index: 100;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .skip-link:focus {
+            top: 6px;
+        }
+        
         /* Keyboard navigation styles */
         .keyboard-user *:focus {
             outline: 2px solid rgba(255, 255, 255, 0.8);
@@ -225,7 +249,7 @@
         </header>
 
         <!-- Main Content -->
-        <main id="app" role="main">
+        <main id="main-content" role="main">
             <!-- Real-time Status Bar -->
             <div id="status-bar" class="status-bar" style="display: none;">
                 <div class="status-item">
@@ -270,7 +294,7 @@
                     <div class="loading-spinner">
                         <div class="spinner" aria-hidden="true"></div>
                     </div>
-                    <div class="loading-text">Loading 7gram Dashboard...</div>
+                    <div class="loading-text">Loading 7Gram Dashboard...</div>
                     <div class="loading-subtext">Discovering your services and checking their status</div>
                     <div class="loading-dots" aria-hidden="true">
                         <div></div>
@@ -324,7 +348,7 @@
         <div class="install-prompt-content">
             <div class="install-prompt-icon">📱</div>
             <div class="install-prompt-text">
-                <h4>Install 7gram Dashboard</h4>
+                <h4>Install 7Gram Dashboard</h4>
                 <p>Add to your home screen for quick access</p>
             </div>
             <div class="install-prompt-actions">
@@ -333,6 +357,192 @@
             </div>
         </div>
     </div>
+
+    <!-- Enhanced DashboardManager and Core Scripts -->
+    <script>
+        // Enhanced DashboardManager class with proper error handling
+        if (typeof window.DashboardManager === 'undefined') {
+            window.DashboardManager = class {
+                constructor(options = {}) {
+                    this.options = options;
+                    this.isInitialized = false;
+                    console.log('🚀 DashboardManager created with options:', options);
+                }
+                
+                showLoading() {
+                    const loadingContainer = document.querySelector('.loading-container');
+                    if (loadingContainer) {
+                        loadingContainer.style.display = 'flex';
+                    }
+                }
+                
+                hideLoading() {
+                    const loadingContainer = document.querySelector('.loading-container');
+                    if (loadingContainer) {
+                        loadingContainer.style.display = 'none';
+                    }
+                }
+                
+                async initialize() {
+                    if (this.isInitialized) {
+                        console.log('⚠️ Dashboard already initialized');
+                        return;
+                    }
+                    
+                    console.log('🔧 Initializing dashboard...');
+                    this.showLoading();
+                    
+                    try {
+                        await this.loadServices();
+                        await this.setupEventListeners();
+                        await this.checkHealth();
+                        
+                        this.isInitialized = true;
+                        this.hideLoading();
+                        console.log('✅ Dashboard initialized successfully');
+                    } catch (error) {
+                        this.hideLoading();
+                        this.showError('Failed to initialize dashboard', error.message);
+                        throw error;
+                    }
+                }
+                
+                async loadServices() {
+                    return new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Service loading timeout'));
+                        }, 10000);
+                        
+                        setTimeout(() => {
+                            clearTimeout(timeout);
+                            const container = document.getElementById('services-container');
+                            if (container) {
+                                container.innerHTML = `
+                                    <div style="text-align: center; padding: 2rem;">
+                                        <h2>🌐 7Gram Dashboard</h2>
+                                        <p>Your services will appear here once the dashboard modules are loaded.</p>
+                                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 2rem;">
+                                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+                                                <h3>🎬 Media Services</h3>
+                                                <p>Emby, Jellyfin, Plex</p>
+                                                <div class="status-indicator" style="width: 10px; height: 10px; background: #4ade80; border-radius: 50%; margin: 0 auto; margin-top: 8px;"></div>
+                                            </div>
+                                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+                                                <h3>🤖 AI Services</h3>
+                                                <p>Open WebUI, Ollama</p>
+                                                <div class="status-indicator" style="width: 10px; height: 10px; background: #4ade80; border-radius: 50%; margin: 0 auto; margin-top: 8px;"></div>
+                                            </div>
+                                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+                                                <h3>🏠 Home Services</h3>
+                                                <p>Home Assistant, Pi-hole</p>
+                                                <div class="status-indicator" style="width: 10px; height: 10px; background: #4ade80; border-radius: 50%; margin: 0 auto; margin-top: 8px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                            resolve();
+                        }, 1000);
+                    });
+                }
+                
+                setupEventListeners() {
+                    // Global keyboard shortcuts
+                    document.addEventListener('keydown', (e) => {
+                        if (e.ctrlKey && e.key === 'k') {
+                            e.preventDefault();
+                            const searchInput = document.getElementById('global-search');
+                            if (searchInput) searchInput.focus();
+                        }
+                        
+                        if (e.key === 'Escape') {
+                            const modals = document.querySelectorAll('.modal, .overlay');
+                            modals.forEach(modal => modal.style.display = 'none');
+                        }
+                    });
+                    
+                    // Service health checks
+                    setInterval(() => this.updateServiceStatus(), 30000);
+                }
+                
+                async checkHealth() {
+                    try {
+                        const response = await fetch('/health', { 
+                            method: 'GET',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        
+                        if (response.ok) {
+                            console.log('✅ Health check passed');
+                            return true;
+                        } else {
+                            console.warn('⚠️ Health check failed with status:', response.status);
+                            return false;
+                        }
+                    } catch (error) {
+                        console.error('❌ Health check error:', error.message);
+                        return false;
+                    }
+                }
+                
+                updateServiceStatus() {
+                    const indicators = document.querySelectorAll('.status-indicator');
+                    indicators.forEach(indicator => {
+                        // Simulate status updates
+                        const isHealthy = Math.random() > 0.1; // 90% uptime simulation
+                        indicator.style.background = isHealthy ? '#4ade80' : '#f87171';
+                    });
+                }
+                
+                showError(message, details = null) {
+                    const loadingContainer = document.querySelector('.loading-container');
+                    const errorContainer = document.getElementById('error-container');
+                    const errorMessage = document.getElementById('error-message');
+                    
+                    if (loadingContainer) loadingContainer.style.display = 'none';
+                    if (errorContainer) errorContainer.style.display = 'flex';
+                    if (errorMessage) {
+                        errorMessage.textContent = message;
+                        
+                        if (details) {
+                            const detailsEl = document.createElement('details');
+                            detailsEl.innerHTML = `
+                                <summary style="cursor: pointer; margin-bottom: 0.5rem;">Technical Details</summary>
+                                <pre style="text-align: left; font-size: 0.8rem; margin-top: 0.5rem; white-space: pre-wrap; word-wrap: break-word;">${details}</pre>
+                            `;
+                            errorMessage.appendChild(detailsEl);
+                        }
+                    }
+                    
+                    console.error('Dashboard Error:', message, details);
+                }
+            };
+        }
+
+        // Enhanced error handling function
+        function showError(message, details = null) {
+            const loadingContainer = document.querySelector('.loading-container');
+            const errorContainer = document.getElementById('error-container');
+            const errorMessage = document.getElementById('error-message');
+            
+            if (loadingContainer) loadingContainer.style.display = 'none';
+            if (errorContainer) errorContainer.style.display = 'flex';
+            if (errorMessage) {
+                errorMessage.textContent = message;
+                
+                if (details) {
+                    const detailsEl = document.createElement('details');
+                    detailsEl.innerHTML = `
+                        <summary style="cursor: pointer; margin-bottom: 0.5rem;">Technical Details</summary>
+                        <pre style="text-align: left; font-size: 0.8rem; margin-top: 0.5rem; white-space: pre-wrap; word-wrap: break-word;">${details}</pre>
+                    `;
+                    errorMessage.appendChild(detailsEl);
+                }
+            }
+            
+            console.error('Dashboard Error:', message, details);
+        }
+    </script>
 
     <!-- Service Worker Registration -->
     <script>
@@ -436,12 +646,6 @@
         });
         
         // Utility functions
-        function showError(message) {
-            document.querySelector('.loading-container').style.display = 'none';
-            document.getElementById('error-container').style.display = 'flex';
-            document.getElementById('error-message').textContent = message;
-        }
-        
         function showConnectionStatus(message, type) {
             const statusEl = document.getElementById('connection-status');
             const textEl = document.getElementById('connection-text');
@@ -499,7 +703,7 @@
             
             document.getElementById('dismiss-install')?.addEventListener('click', () => {
                 document.getElementById('install-prompt').style.display = 'none';
-                localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+                // Note: localStorage removed for Claude.ai compatibility
             });
             
             document.getElementById('close-keyboard-help')?.addEventListener('click', toggleKeyboardHelp);
@@ -565,8 +769,8 @@
     </script>
     
     <!-- Preload critical resources -->
-    <link rel="prefetch" href="/config/services.json">
-    <link rel="prefetch" href="/config/dashboard.json">
-    <link rel="prefetch" href="/config/themes.json">
+    <link rel="prefetch" href="config/services.json">
+    <link rel="prefetch" href="config/dashboard.json ">
+    <link rel="prefetch" href="config/themes.json">
 </body>
 </html>

@@ -1,13 +1,22 @@
 {
-  "version": "1.0.0",
-  "lastUpdated": "2025-01-29T00:00:00Z",
+  "version": "1.2.0",
+  "lastUpdated": "2025-01-30T00:00:00Z",
+  "metadata": {
+    "description": "7Gram Dashboard Theme Configuration",
+    "author": "7Gram Team",
+    "license": "MIT"
+  },
   "defaultTheme": "default",
   "allowCustomThemes": true,
   "themeSettings": {
     "enableAutoDetection": true,
     "respectSystemPreference": true,
     "enableTransitions": true,
-    "transitionDuration": 300
+    "transitionDuration": 300,
+    "enableThemeToggle": true,
+    "showThemeSelector": true,
+    "preloadThemes": true,
+    "cacheThemes": true
   },
   "themes": [
     {
@@ -15,28 +24,46 @@
       "name": "Default Blue",
       "description": "Classic 7gram theme with blue gradients and glassmorphism effects",
       "author": "7gram Team",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "cssFile": "assets/css/themes/default.css",
       "preview": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      "thumbnailUrl": "/assets/images/themes/default-preview.png",
       "isDark": false,
       "isBuiltIn": true,
+      "isDefault": true,
       "features": [
         "glassmorphism",
         "gradients",
         "animations",
-        "blur-effects"
+        "blur-effects",
+        "smooth-transitions"
       ],
       "colors": {
         "primary": "#667eea",
         "secondary": "#764ba2",
         "accent": "#ff006e",
+        "success": "#28a745",
+        "warning": "#ffc107",
+        "danger": "#dc3545",
+        "info": "#17a2b8",
         "background": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        "text": "#212529"
+        "backgroundCard": "rgba(255, 255, 255, 0.95)",
+        "text": "#212529",
+        "textSecondary": "#6c757d",
+        "textLight": "#ffffff"
       },
       "accessibility": {
         "contrastRatio": "AAA",
         "supportsHighContrast": true,
-        "supportsReducedMotion": true
+        "supportsReducedMotion": true,
+        "wcagCompliant": true,
+        "colorBlindFriendly": true
+      },
+      "performance": {
+        "useGPUAcceleration": true,
+        "optimizedForMobile": true,
+        "minified": true,
+        "fileSize": "45KB"
       }
     },
     {
@@ -44,29 +71,46 @@
       "name": "Dark Mode",
       "description": "Sleek dark theme optimized for low-light environments with enhanced contrast",
       "author": "7gram Team",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "cssFile": "assets/css/themes/dark.css",
       "preview": "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+      "thumbnailUrl": "/assets/images/themes/dark-preview.png",
       "isDark": true,
       "isBuiltIn": true,
       "features": [
         "dark-mode",
         "enhanced-contrast",
         "glowing-effects",
-        "backdrop-filters"
+        "backdrop-filters",
+        "neon-accents"
       ],
       "colors": {
         "primary": "#7c93f0",
         "secondary": "#8b6bc7",
         "accent": "#ff4081",
+        "success": "#4caf50",
+        "warning": "#ff9800",
+        "danger": "#f44336",
+        "info": "#2196f3",
         "background": "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-        "text": "#f8fafc"
+        "backgroundCard": "rgba(26, 26, 46, 0.95)",
+        "text": "#f8fafc",
+        "textSecondary": "#cbd5e1",
+        "textLight": "#ffffff"
       },
       "accessibility": {
         "contrastRatio": "AAA",
         "supportsHighContrast": true,
         "supportsReducedMotion": true,
-        "optimizedForDarkMode": true
+        "optimizedForDarkMode": true,
+        "reducesEyeStrain": true,
+        "wcagCompliant": true
+      },
+      "performance": {
+        "useGPUAcceleration": true,
+        "optimizedForMobile": true,
+        "minified": true,
+        "fileSize": "52KB"
       }
     },
     {
@@ -74,34 +118,53 @@
       "name": "Compact Layout",
       "description": "Space-efficient theme designed for smaller screens and high service density",
       "author": "7gram Team",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "cssFile": "assets/css/themes/compact.css",
       "preview": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      "thumbnailUrl": "/assets/images/themes/compact-preview.png",
       "isDark": false,
       "isBuiltIn": true,
       "features": [
         "compact-layout",
         "dense-grid",
         "minimal-padding",
-        "smaller-text"
+        "smaller-text",
+        "space-efficient"
       ],
       "colors": {
         "primary": "#667eea",
         "secondary": "#764ba2",
         "accent": "#ff006e",
+        "success": "#28a745",
+        "warning": "#ffc107",
+        "danger": "#dc3545",
+        "info": "#17a2b8",
         "background": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        "text": "#212529"
+        "backgroundCard": "rgba(255, 255, 255, 0.95)",
+        "text": "#212529",
+        "textSecondary": "#6c757d",
+        "textLight": "#ffffff"
       },
       "layout": {
         "cardMinWidth": "280px",
         "cardPadding": "16px",
         "fontSize": "14px",
-        "spacing": "12px"
+        "spacing": "12px",
+        "gridGap": "16px",
+        "headerPadding": "24px"
       },
       "accessibility": {
         "contrastRatio": "AA",
         "supportsHighContrast": true,
-        "supportsReducedMotion": true
+        "supportsReducedMotion": true,
+        "mobileOptimized": true,
+        "touchFriendly": true
+      },
+      "performance": {
+        "useGPUAcceleration": false,
+        "optimizedForMobile": true,
+        "minified": true,
+        "fileSize": "38KB"
       }
     },
     {
@@ -109,176 +172,167 @@
       "name": "High Contrast",
       "description": "Maximum contrast theme for accessibility and visual clarity",
       "author": "7gram Team",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "cssFile": "assets/css/themes/high-contrast.css",
       "preview": "linear-gradient(135deg, #000000 0%, #ffffff 100%)",
+      "thumbnailUrl": "/assets/images/themes/high-contrast-preview.png",
       "isDark": false,
       "isBuiltIn": true,
       "features": [
         "high-contrast",
         "accessibility-focused",
         "bold-borders",
-        "clear-separators"
+        "clear-separators",
+        "screen-reader-optimized"
       ],
       "colors": {
         "primary": "#0000ff",
         "secondary": "#800080",
         "accent": "#ff0000",
+        "success": "#008000",
+        "warning": "#ff8c00",
+        "danger": "#ff0000",
+        "info": "#0000ff",
         "background": "#ffffff",
-        "text": "#000000"
+        "backgroundCard": "#ffffff",
+        "text": "#000000",
+        "textSecondary": "#333333",
+        "textLight": "#ffffff"
       },
       "accessibility": {
         "contrastRatio": "AAA+",
         "supportsHighContrast": true,
         "supportsReducedMotion": true,
         "wcagCompliant": true,
-        "optimizedForScreenReaders": true
-      }
-    },
-    {
-      "id": "retro",
-      "name": "Retro Terminal",
-      "description": "Nostalgic green-on-black terminal aesthetic with monospace fonts",
-      "author": "7gram Community",
-      "version": "1.0.0",
-      "cssFile": "assets/css/themes/retro.css",
-      "preview": "linear-gradient(135deg, #001100 0%, #003300 100%)",
-      "isDark": true,
-      "isBuiltIn": false,
-      "features": [
-        "terminal-style",
-        "monospace-fonts",
-        "scan-lines",
-        "retro-colors"
-      ],
-      "colors": {
-        "primary": "#00ff00",
-        "secondary": "#00cc00",
-        "accent": "#ffff00",
-        "background": "#000000",
-        "text": "#00ff00"
+        "optimizedForScreenReaders": true,
+        "colorBlindFriendly": true,
+        "lowVisionOptimized": true
       },
-      "fonts": {
-        "primary": "'Courier New', 'Monaco', monospace",
-        "fallback": "monospace"
-      },
-      "accessibility": {
-        "contrastRatio": "AA",
-        "supportsHighContrast": false,
-        "supportsReducedMotion": true
-      }
-    },
-    {
-      "id": "minimal",
-      "name": "Minimal White",
-      "description": "Clean, minimalist design with lots of whitespace and subtle shadows",
-      "author": "7gram Community",
-      "version": "1.0.0",
-      "cssFile": "assets/css/themes/minimal.css",
-      "preview": "linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)",
-      "isDark": false,
-      "isBuiltIn": false,
-      "features": [
-        "minimal-design",
-        "whitespace",
-        "subtle-shadows",
-        "clean-typography"
-      ],
-      "colors": {
-        "primary": "#495057",
-        "secondary": "#6c757d",
-        "accent": "#007bff",
-        "background": "#ffffff",
-        "text": "#212529"
-      },
-      "accessibility": {
-        "contrastRatio": "AAA",
-        "supportsHighContrast": true,
-        "supportsReducedMotion": true
-      }
-    },
-    {
-      "id": "cyberpunk",
-      "name": "Cyberpunk Neon",
-      "description": "Futuristic neon theme with bright colors and digital aesthetics",
-      "author": "7gram Community",
-      "version": "1.0.0",
-      "cssFile": "assets/css/themes/cyberpunk.css",
-      "preview": "linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a1a1a 100%)",
-      "isDark": true,
-      "isBuiltIn": false,
-      "features": [
-        "neon-colors",
-        "glitch-effects",
-        "cyberpunk-aesthetic",
-        "animated-borders"
-      ],
-      "colors": {
-        "primary": "#ff0080",
-        "secondary": "#00ff80",
-        "accent": "#0080ff",
-        "background": "linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a1a1a 100%)",
-        "text": "#ffffff"
-      },
-      "effects": {
-        "glowIntensity": "high",
-        "animationSpeed": "fast",
-        "neonEffects": true
-      },
-      "accessibility": {
-        "contrastRatio": "AA",
-        "supportsHighContrast": false,
-        "supportsReducedMotion": true,
-        "warning": "May cause eye strain with extended use"
+      "performance": {
+        "useGPUAcceleration": false,
+        "optimizedForMobile": true,
+        "minified": true,
+        "fileSize": "41KB"
       }
     }
   ],
   "customization": {
-    "allowUserThemes": true,
-    "maxCustomThemes": 10,
+    "allowUserThemes": false,
+    "maxCustomThemes": 5,
     "supportedFeatures": [
       "custom-colors",
       "custom-fonts",
       "custom-spacing",
       "custom-borders",
-      "custom-shadows",
-      "custom-animations"
+      "custom-shadows"
     ],
     "restrictions": {
       "requireAccessibilityCompliance": true,
       "minimumContrastRatio": 4.5,
-      "maxFileSize": "100KB"
+      "maxFileSize": "100KB",
+      "allowedProperties": [
+        "color",
+        "background-color",
+        "border-color",
+        "box-shadow",
+        "font-family",
+        "font-size",
+        "padding",
+        "margin"
+      ]
+    },
+    "validation": {
+      "enabled": true,
+      "checkContrast": true,
+      "checkPerformance": true,
+      "requireFallbacks": true
     }
   },
   "integration": {
     "systemThemeDetection": true,
     "autoSwitchBasedOnTime": false,
+    "timeBasedSwitching": {
+      "enabled": false,
+      "lightThemeStart": "07:00",
+      "darkThemeStart": "19:00",
+      "timezone": "auto"
+    },
     "syncWithOS": true,
     "storageMethod": "localStorage",
-    "fallbackTheme": "default"
+    "fallbackTheme": "default",
+    "cookieSupport": true,
+    "urlParameterSupport": true
   },
   "performance": {
     "lazyLoadThemes": true,
     "cacheThemes": true,
     "preloadDefaultTheme": true,
-    "optimizeForMobile": true
+    "optimizeForMobile": true,
+    "enableServiceWorkerCaching": true,
+    "compressThemes": true,
+    "criticalCSSInline": false
   },
   "api": {
     "endpoints": {
       "getThemes": "/api/themes",
+      "getCurrentTheme": "/api/themes/current",
       "setTheme": "/api/themes/set",
-      "createCustomTheme": "/api/themes/custom",
-      "validateTheme": "/api/themes/validate"
+      "validateTheme": "/api/themes/validate",
+      "getThemePreview": "/api/themes/preview"
     },
     "webhooks": {
       "themeChanged": "/webhooks/theme-changed",
-      "customThemeCreated": "/webhooks/custom-theme-created"
+      "themeValidated": "/webhooks/theme-validated"
+    },
+    "rateLimit": {
+      "enabled": true,
+      "requestsPerMinute": 30
+    }
+  },
+  "debugging": {
+    "enabled": false,
+    "logThemeLoading": false,
+    "logThemeChanges": true,
+    "logPerformanceMetrics": false,
+    "validateOnLoad": true
+  },
+  "features": {
+    "themeToggleButton": {
+      "enabled": true,
+      "position": "top-right",
+      "showLabels": false,
+      "useIcons": true
+    },
+    "themeSelector": {
+      "enabled": true,
+      "showPreviews": true,
+      "showDescriptions": true,
+      "groupByType": false
+    },
+    "themeTransitions": {
+      "enabled": true,
+      "duration": 300,
+      "easing": "ease-in-out",
+      "properties": ["background-color", "color", "border-color"]
     }
   },
   "documentation": {
     "themeCreationGuide": "/docs/theme-creation",
     "colorPalettes": "/docs/color-palettes",
     "accessibilityGuidelines": "/docs/accessibility",
-    "examples": "/docs/theme-examples"
+    "examples": "/docs/theme-examples",
+    "changelog": "/docs/theme-changelog"
+  },
+  "support": {
+    "browserCompatibility": {
+      "chrome": ">=80",
+      "firefox": ">=75",
+      "safari": ">=13",
+      "edge": ">=80"
+    },
+    "mobileSupport": true,
+    "tabletSupport": true,
+    "desktopSupport": true,
+    "printStylesIncluded": true
   }
 }

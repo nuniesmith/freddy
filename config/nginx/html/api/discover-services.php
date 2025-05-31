@@ -1,6 +1,6 @@
 <?php
 /**
- * Service Discovery API for 7gram Dashboard
+ * Service Discovery API for 7Gram Dashboard
  * Automatically discovers services from directory structure
  */
 

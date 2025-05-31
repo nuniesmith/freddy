@@ -1,6 +1,6 @@
 <?php
 /**
- * Health Check API for 7gram Dashboard
+ * Health Check API for 7Gram Dashboard
  * Provides service health monitoring and status endpoints
  */
 
@@ -10,7 +10,7 @@ header('Access-Control-Allow-Methods: GET, POST');
 header('Access-Control-Allow-Headers: Content-Type');
 
 class HealthChecker {
-    private $servicesFile = '../config/services.json';
+    private $servicesFile = '..config/services.json';
     private $healthCacheFile = '../cache/health-status.json';
     private $cacheTimeout = 60; // 1 minute
     private $requestTimeout = 10; // 10 seconds

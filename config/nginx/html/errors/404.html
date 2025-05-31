@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 - Page Not Found | 7gram Network</title>
+    <meta name="color-scheme" content="light dark">
+    <title>404 - Page Not Found | 7Gram Network</title>
     <style>
         :root {
             --primary-color: #667eea;
@@ -35,6 +36,24 @@
             min-height: 100vh;
             position: relative;
             overflow-x: hidden;
+        }
+
+        /* Skip link styles */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 6px;
+            background: white;
+            color: black;
+            padding: 8px;
+            z-index: 100;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .skip-link:focus {
+            top: 6px;
         }
 
         /* Animated background elements */
@@ -260,6 +279,17 @@
             word-break: break-all;
         }
 
+        /* Server status indicator */
+        #server-status {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            margin: 20px 0;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
         footer {
             margin-top: 40px;
             color: #6c757d;
@@ -338,15 +368,26 @@
                 font-size: 4rem;
             }
         }
+
+        /* Accessibility improvements */
+        @media (prefers-reduced-motion: reduce) {
+            .error-illustration,
+            .bg-element {
+                animation: none;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Accessibility: Skip to main content -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
     <!-- Animated background elements -->
     <div class="bg-element"></div>
     <div class="bg-element"></div>
     <div class="bg-element"></div>
 
-    <div class="container">
+    <div class="container" id="main-content">
         <div class="error-illustration">🤖</div>
         <div class="error-code">404</div>
         <h1>Oops! Page Not Found</h1>
@@ -358,6 +399,11 @@
 
         <div class="current-url">
             <strong>Requested URL:</strong> <span id="current-url"></span>
+        </div>
+
+        <!-- Server Status Display -->
+        <div id="server-status">
+            <strong>Server Status:</strong> Checking connection...
         </div>
 
         <div class="suggestions">
@@ -376,7 +422,7 @@
         </div>
 
         <footer>
-            <p>🍯 7gram Network - Where digital sweetness meets functionality</p>
+            <p>🍯 7Gram Network - Where digital sweetness meets functionality</p>
             <div class="footer-links">
                 <a href="/">Home</a>
                 <a href="/health">System Status</a>
@@ -386,13 +432,65 @@
     </div>
 
     <script>
+        // Enhanced error reporting for nginx debugging
+        function reportError() {
+            const errorDetails = {
+                url: window.location.href,
+                userAgent: navigator.userAgent,
+                timestamp: new Date().toISOString(),
+                referrer: document.referrer,
+                errorType: '404',
+                viewport: `${window.innerWidth}x${window.innerHeight}`,
+                connection: navigator.connection?.effectiveType || 'unknown'
+            };
+            
+            console.error('7Gram Error Report:', errorDetails);
+            
+            // Try to ping the health endpoint with timeout
+            const healthCheck = fetch('/health', { 
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(5000)
+            });
+            
+            healthCheck
+                .then(response => {
+                    console.log('Health check status:', response.status);
+                    if (response.ok) {
+                        console.log('✅ Main server is healthy - this might be a specific service issue');
+                        updateErrorMessage('✅ Server is running but this specific resource is unavailable');
+                    } else {
+                        console.log('⚠️ Server responding but with issues');
+                        updateErrorMessage('⚠️ Server is experiencing issues');
+                    }
+                })
+                .catch(error => {
+                    console.log('❌ Cannot reach health endpoint:', error.message);
+                    updateErrorMessage('❌ Server appears to be down or unreachable');
+                });
+        }
+
+        function updateErrorMessage(status) {
+            const statusEl = document.getElementById('server-status');
+            if (statusEl) {
+                statusEl.innerHTML = `<strong>Server Status:</strong> ${status}`;
+            }
+        }
+
         /* Display the current URL that caused the 404 */
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('current-url').textContent = window.location.href;
+            
+            // Run error report after page loads
+            setTimeout(reportError, 500);
         });
 
         /* Add some interactive behavior */
         document.addEventListener('mousemove', function(e) {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                return; // Skip animations for users who prefer reduced motion
+            }
+            
             const elements = document.querySelectorAll('.bg-element');
             const x = e.clientX / window.innerWidth;
             const y = e.clientY / window.innerHeight;
@@ -404,6 +502,13 @@
                 
                 element.style.transform = `translate(${xPos}px, ${yPos}px)`;
             });
+        });
+
+        // Keyboard accessibility
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                // Could close any open dialogs here
+            }
         });
 
         /* Console easter egg */

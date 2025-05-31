@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>7gram Theme Diagnostic Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 24px;
+        }
+        
+        .section {
+            margin-bottom: 32px;
+            padding: 24px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #495057;
+            margin-top: 0;
+        }
+        
+        .test-result {
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin: 8px 4px;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .file-list {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            padding: 8px;
+            margin: 4px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .file-exists {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .file-missing {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .logs {
+            background: #212529;
+            color: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 7gram Theme Diagnostic Tool</h1>
+        
+        <div class="section">
+            <h2>Quick Diagnosis</h2>
+            <button onclick="runFullDiagnostic()">🔍 Run Full Diagnostic</button>
+            <button onclick="testThemeFiles()">📁 Test Theme Files</button>
+            <button onclick="checkNetworkAccess()">🌐 Check Network Access</button>
+            <button onclick="generateFixScript()">🔧 Generate Fix Script</button>
+            <div id="quick-results"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Theme File Status</h2>
+            <div id="file-status">Click "Test Theme Files" to check theme file availability...</div>
+        </div>
+        
+        <div class="section">
+            <h2>Network & Server Tests</h2>
+            <div id="network-status">Click "Check Network Access" to test server connectivity...</div>
+        </div>
+        
+        <div class="section">
+            <h2>Browser Environment</h2>
+            <div id="browser-info"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Diagnostic Logs</h2>
+            <div class="logs" id="diagnostic-logs">Diagnostic logs will appear here...</div>
+        </div>
+        
+        <div class="section">
+            <h2>Recommended Fixes</h2>
+            <div id="recommendations"></div>
+        </div>
+    </div>
+
+    <script>
+        let diagnosticLogs = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}`;
+            diagnosticLogs.push(logEntry);
+            
+            const logsElement = document.getElementById('diagnostic-logs');
+            logsElement.textContent = diagnosticLogs.join('\n');
+            logsElement.scrollTop = logsElement.scrollHeight;
+        }
+        
+        async function runFullDiagnostic() {
+            log('Starting full diagnostic...');
+            
+            const results = document.getElementById('quick-results');
+            results.innerHTML = '<div class="warning">Running diagnostic tests...</div>';
+            
+            // Clear previous results
+            diagnosticLogs = [];
+            
+            // Run all tests
+            await checkBrowserEnvironment();
+            await testThemeFiles();
+            await checkNetworkAccess();
+            await testThemeManager();
+            
+            results.innerHTML = '<div class="success">✅ Full diagnostic completed. Check sections below for details.</div>';
+            generateRecommendations();
+            
+            log('Full diagnostic completed');
+        }
+        
+        async function checkBrowserEnvironment() {
+            log('Checking browser environment...');
+            
+            const info = {
+                userAgent: navigator.userAgent,
+                viewport: `${window.innerWidth}x${window.innerHeight}`,
+                colorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+                reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+                localStorage: !!window.localStorage,
+                sessionStorage: !!window.sessionStorage,
+                fetch: !!window.fetch,
+                css: !!window.CSS,
+                customProperties: CSS.supports && CSS.supports('color', 'var(--test)')
+            };
+            
+            let html = '<div class="file-list">';
+            for (const [key, value] of Object.entries(info)) {
+                const status = value ? 'success' : 'error';
+                html += `<div class="test-result ${status}">${key}: ${value}</div>`;
+                log(`Browser ${key}: ${value}`);
+            }
+            html += '</div>';
+            
+            document.getElementById('browser-info').innerHTML = html;
+        }
+        
+        async function testThemeFiles() {
+            log('Testing theme file availability...');
+            
+            const themeFiles = [
+                'assets/css/themes/default.css',
+                'assets/css/themes/dark.css',
+                'assets/css/themes/compact.css',
+                'assets/css/themes/high-contrast.css',
+                'assets/css/main.css',
+                'assets/css/components.css',
+                'config/themes.json'
+            ];
+            
+            const results = [];
+            
+            for (const file of themeFiles) {
+                try {
+                    log(`Testing file: ${file}`);
+                    const response = await fetch(file, { method: 'HEAD' });
+                    const status = response.ok ? 'exists' : 'missing';
+                    results.push({ file, status, statusCode: response.status });
+                    log(`File ${file}: ${status} (${response.status})`);
+                } catch (error) {
+                    results.push({ file, status: 'error', error: error.message });
+                    log(`File ${file}: error - ${error.message}`, 'error');
+                }
+            }
+            
+            let html = '<div class="file-list">';
+            results.forEach(result => {
+                const cssClass = result.status === 'exists' ? 'file-exists' : 'file-missing';
+                const icon = result.status === 'exists' ? '✅' : '❌';
+                const details = result.statusCode ? `(${result.statusCode})` : (result.error || '');
+                html += `<div class="file-item ${cssClass}">${icon} ${result.file} ${details}</div>`;
+            });
+            html += '</div>';
+            
+            document.getElementById('file-status').innerHTML = html;
+            
+            // Check for missing files
+            const missingFiles = results.filter(r => r.status !== 'exists');
+            if (missingFiles.length > 0) {
+                log(`Found ${missingFiles.length} missing or inaccessible theme files`, 'warning');
+            }
+        }
+        
+        async function checkNetworkAccess() {
+            log('Checking network access and server connectivity...');
+            
+            const tests = [
+                { name: 'Same-origin assets', url: window.location.origin + '/assets/css/main.css' },
+                { name: 'Config directory', url: window.location.origin + '/config/' },
+                { name: 'Theme directory', url: window.location.origin + '/assets/css/themes/' },
+                { name: 'API endpoint', url: window.location.origin + '/api/dynamic-services' }
+            ];
+            
+            const results = [];
+            
+            for (const test of tests) {
+                try {
+                    log(`Testing ${test.name}: ${test.url}`);
+                    const start = performance.now();
+                    const response = await fetch(test.url, { method: 'HEAD' });
+                    const duration = Math.round(performance.now() - start);
+                    
+                    results.push({
+                        name: test.name,
+                        status: response.ok ? 'success' : 'error',
+                        statusCode: response.status,
+                        duration: duration
+                    });
+                    
+                    log(`${test.name}: ${response.status} (${duration}ms)`);
+                } catch (error) {
+                    results.push({
+                        name: test.name,
+                        status: 'error',
+                        error: error.message
+                    });
+                    log(`${test.name}: error - ${error.message}`, 'error');
+                }
+            }
+            
+            let html = '<div class="file-list">';
+            results.forEach(result => {
+                const cssClass = result.status === 'success' ? 'success' : 'error';
+                const icon = result.status === 'success' ? '✅' : '❌';
+                const details = result.statusCode 
+                    ? `${result.statusCode} (${result.duration}ms)` 
+                    : (result.error || '');
+                html += `<div class="test-result ${cssClass}">${icon} ${result.name}: ${details}</div>`;
+            });
+            html += '</div>';
+            
+            document.getElementById('network-status').innerHTML = html;
+        }
+        
+        async function testThemeManager() {
+            log('Testing theme manager functionality...');
+            
+            // Test if theme manager exists and is functional
+            const tests = [
+                { name: 'CSS Custom Properties Support', test: () => CSS.supports('color', 'var(--test)') },
+                { name: 'CSS Grid Support', test: () => CSS.supports('display', 'grid') },
+                { name: 'CSS Backdrop Filter Support', test: () => CSS.supports('backdrop-filter', 'blur(10px)') },
+                { name: 'CSS Gradients Support', test: () => CSS.supports('background', 'linear-gradient(45deg, red, blue)') },
+                { name: 'Local Storage Available', test: () => !!window.localStorage },
+                { name: 'Match Media Support', test: () => !!window.matchMedia }
+            ];
+            
+            tests.forEach(test => {
+                try {
+                    const result = test.test();
+                    const status = result ? 'success' : 'warning';
+                    log(`${test.name}: ${result ? 'supported' : 'not supported'}`, status);
+                } catch (error) {
+                    log(`${test.name}: error - ${error.message}`, 'error');
+                }
+            });
+        }
+        
+        function generateRecommendations() {
+            log('Generating recommendations...');
+            
+            const recommendations = [
+                {
+                    title: 'File Structure Check',
+                    description: 'Ensure all theme CSS files exist in the correct directory structure:',
+                    details: [
+                        'assets/css/themes/default.css',
+                        'assets/css/themes/dark.css', 
+                        'assets/css/themes/compact.css',
+                        'assets/css/themes/high-contrast.css'
+                    ]
+                },
+                {
+                    title: 'Server Configuration',
+                    description: 'Check your web server configuration:',
+                    details: [
+                        'Ensure CSS files are served with correct MIME type (text/css)',
+                        'Enable gzip compression for CSS files',
+                        'Set proper cache headers for static assets',
+                        'Check for any CSP (Content Security Policy) restrictions'
+                    ]
+                },
+                {
+                    title: 'Network Issues',
+                    description: 'If files are timing out:',
+                    details: [
+                        'Check nginx/apache error logs',
+                        'Verify filesystem permissions on CSS files',
+                        'Test file access directly via browser URL',
+                        'Check for firewall or proxy blocking'
+                    ]
+                },
+                {
+                    title: 'Theme Manager Fixes',
+                    description: 'Theme manager improvements:',
+                    details: [
+                        'Implement the fixed ThemeManager code provided',
+                        'Add built-in fallback theme support',
+                        'Increase CSS loading timeout values',
+                        'Add retry logic for failed loads'
+                    ]
+                }
+            ];
+            
+            let html = '';
+            recommendations.forEach(rec => {
+                html += `
+                    <div class="section">
+                        <h3>${rec.title}</h3>
+                        <p>${rec.description}</p>
+                        <ul>
+                            ${rec.details.map(detail => `<li>${detail}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('recommendations').innerHTML = html;
+        }
+        
+        function generateFixScript() {
+            log('Generating fix script...');
+            
+            const script = `#!/bin/bash
+# 7gram Theme Fix Script
+# Run this script from your 7gram dashboard root directory
+
+echo "🔧 7gram Theme Fix Script"
+echo "========================="
+
+# Check if we're in the right directory
+if [ ! -f "index.html" ]; then
+    echo "❌ Error: Please run this script from your 7gram dashboard root directory"
+    exit 1
+fi
+
+# Create theme directory if it doesn't exist
+echo "📁 Creating theme directories..."
+mkdir -p assets/css/themes
+mkdir -p config
+
+# Check file permissions
+echo "🔐 Checking file permissions..."
+find assets/css/themes -name "*.css" -exec chmod 644 {} \\;
+find config -name "*.json" -exec chmod 644 {} \\;
+
+# Test web server access
+echo "🌐 Testing web server access..."
+if command -v curl &> /dev/null; then
+    echo "Testing theme file access..."
+    curl -I "$(cat <<EOF | python3
+import json, sys
+try:
+    with open('/etc/hostname', 'r') as f:
+        hostname = f.read().strip()
+    print(f"http://localhost/assets/css/themes/default.css")
+except:
+    print("http://localhost/assets/css/themes/default.css")
+EOF
+    )" || echo "⚠️  Could not access theme files via HTTP"
+fi
+
+# Create minimal themes.json if missing
+if [ ! -f "config/themes.json" ]; then
+    echo "📝 Creating minimal themes.json..."
+    cat > config/themes.json << 'EOL'
+{
+  "themes": [
+    {
+      "id": "default",
+      "name": "Default",
+      "description": "Default 7gram theme",
+      "cssFile": "assets/css/themes/default.css",
+      "isDark": false
+    },
+    {
+      "id": "dark", 
+      "name": "Dark Mode",
+      "description": "Dark theme for low-light environments",
+      "cssFile": "assets/css/themes/dark.css",
+      "isDark": true
+    }
+  ]
+}
+EOL
+fi
+
+echo "✅ Fix script completed!"
+echo "Next steps:"
+echo "1. Replace your themeManager.js with the fixed version"
+echo "2. Ensure all CSS theme files exist and are readable"
+echo "3. Restart your web server"
+echo "4. Clear browser cache and test"
+`;
+
+            // Download the script
+            const blob = new Blob([script], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '7gram-theme-fix.sh';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            log('Fix script generated and downloaded');
+        }
+        
+        // Run initial browser environment check
+        window.addEventListener('load', () => {
+            checkBrowserEnvironment();
+            log('Theme diagnostic tool loaded');
+        });
+    </script>
+</body>
+</html>
