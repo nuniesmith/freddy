@@ -1,1 +1,0 @@
-config/nginx config/nginx/certs config/nginx/conf.d config/nginx/docs config/nginx/html config/nginx/includes config/nginx/7gram.zone config/nginx/mime.types config/nginx/nginx.conf

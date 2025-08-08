@@ -1,0 +1,145 @@
+<!-- components/category.html -->
+<div class="category-section" data-category="{{categoryId}}" data-priority="{{priority}}">
+    <div class="category-header">
+        <div class="category-title-section">
+            <h2 class="category-title" id="category-{{categoryId}}">
+                <span class="category-icon" aria-hidden="true">{{categoryIcon}}</span>
+                <span class="category-name">{{categoryName}}</span>
+                <span class="category-count" aria-label="{{serviceCount}} services in {{categoryName}}">
+                    ({{serviceCount}})
+                </span>
+            </h2>
+            
+            <p class="category-description">{{description}}</p>
+        </div>
+        
+        <div class="category-controls">
+            <div class="category-actions">
+                <button class="category-filter-btn" 
+                        data-category="{{categoryId}}"
+                        data-action="filter-category"
+                        title="Show only {{categoryName}} services"
+                        aria-label="Filter to show only {{categoryName}} services">
+                    <span class="filter-icon" aria-hidden="true">🔍</span>
+                </button>
+                
+                <button class="category-sort-btn" 
+                        data-category="{{categoryId}}"
+                        data-action="sort-category"
+                        title="Sort {{categoryName}} services"
+                        aria-label="Sort {{categoryName}} services">
+                    <span class="sort-icon" aria-hidden="true">🔄</span>
+                </button>
+                
+                <button class="category-toggle-btn" 
+                        data-category="{{categoryId}}"
+                        data-action="toggle-category"
+                        title="Collapse/Expand category"
+                        aria-label="Toggle {{categoryName}} category visibility"
+                        aria-expanded="true"
+                        aria-controls="services-{{categoryId}}">
+                    <span class="toggle-icon" aria-hidden="true">−</span>
+                </button>
+            </div>
+            
+            <div class="category-status">
+                <div class="status-summary">
+                    <span class="status-count online" id="{{categoryId}}-online">0</span>
+                    <span class="status-count warning" id="{{categoryId}}-warning">0</span>
+                    <span class="status-count offline" id="{{categoryId}}-offline">0</span>
+                </div>
+                
+                <div class="category-health" title="Category health score">
+                    <div class="health-bar">
+                        <div class="health-fill" style="width: '{{healthPercentage}}%'"></div>
+                    </div>
+                    <span class="health-text">{{healthPercentage}}%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="category-content" 
+         id="services-{{categoryId}}"
+         aria-labelledby="category-{{categoryId}}">
+        
+        <div class="category-filters filters-enabled">
+            <div class="filter-options">
+                <button class="filter-option active" data-filter="all">
+                    All ({{serviceCount}})
+                </button>
+                
+                <button class="filter-option" data-filter="online">
+                    <span class="status-dot online" aria-hidden="true"></span>
+                    Online
+                </button>
+                
+                <button class="filter-option" data-filter="warning">
+                    <span class="status-dot warning" aria-hidden="true"></span>
+                    Warning
+                </button>
+                
+                <button class="filter-option" data-filter="offline">
+                    <span class="status-dot offline" aria-hidden="true"></span>
+                    Offline
+                </button>
+            </div>
+            
+            <div class="sort-options">
+                <select class="sort-select" aria-label="Sort services">
+                    <option value="name">Sort by Name</option>
+                    <option value="status">Sort by Status</option>
+                    <option value="usage">Sort by Usage</option>
+                    <option value="priority">Sort by Priority</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="services-grid" 
+             role="group" 
+             aria-label="{{categoryName}} services">
+            <!-- Service cards will be inserted here by JavaScript -->
+        </div>
+        
+        <div class="category-empty" style="display: none;">
+            <div class="empty-state">
+                <div class="empty-icon" aria-hidden="true">📦</div>
+                <h3 class="empty-title">No Services Found</h3>
+                <p class="empty-description">
+                    No services match your current filter criteria in {{categoryName}}.
+                </p>
+                <button class="empty-action" data-action="clear-filters">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="category-footer footer-enabled">
+        <div class="category-summary">
+            <small class="category-stats">
+                {{serviceCount}} services • 
+                <span id="{{categoryId}}-active">0</span> active • 
+                Updated <time datetime="{{lastUpdated}}">{{lastUpdatedText}}</time>
+            </small>
+        </div>
+        
+        <div class="category-actions-secondary">
+            <button class="secondary-action" 
+                    data-category="{{categoryId}}"
+                    data-action="refresh-category"
+                    title="Refresh {{categoryName}} services">
+                <span class="action-icon" aria-hidden="true">🔄</span>
+                <span class="action-text">Refresh</span>
+            </button>
+            
+            <button class="secondary-action export-enabled" 
+                    data-category="{{categoryId}}"
+                    data-action="export-category"
+                    title="Export {{categoryName}} configuration">
+                <span class="action-icon" aria-hidden="true">📥</span>
+                <span class="action-text">Export</span>
+            </button>
+        </div>
+    </div>
+</div>

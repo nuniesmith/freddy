@@ -1,38 +1,106 @@
-<div class="dashboard-footer">
-    <p>
-        <span class="status-indicator"></span>
-        &copy; {{year}} 7Gram Network | 
-        Last updated: <span id="last-updated">{{timestamp}}</span>
-    </p>
-    
-    {{#if showLinks}}
-    <div class="footer-links">
-        {{#each footerLinks}}
-        <a href="{{url}}" {{#if external}}target="_blank" rel="noopener noreferrer"{{/if}}>
-            {{#if icon}}{{icon}} {{/if}}{{text}}
-        </a>
-        {{/each}}
+<!-- components/footer.html -->
+<footer class="dashboard-footer" role="contentinfo">
+    <div class="footer-content">
+        <div class="footer-section footer-brand">
+            <div class="brand-info">
+                <span class="footer-icon" aria-hidden="true">🏠</span>
+                <span class="footer-brand-text">7Gram Network</span>
+            </div>
+            <p class="footer-description">Your personal home services dashboard</p>
+        </div>
+        
+        <div class="footer-section footer-stats stats-visible">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-label">Services:</span>
+                    <span class="stat-value" id="footer-service-count">{{serviceCount}}</span>
+                </div>
+                
+                <div class="stat-item">
+                    <span class="stat-label">Categories:</span>
+                    <span class="stat-value" id="footer-category-count">{{categoryCount}}</span>
+                </div>
+                
+                <div class="stat-item">
+                    <span class="stat-label">Uptime:</span>
+                    <span class="stat-value" id="footer-uptime">{{uptime}}</span>
+                </div>
+                
+                <div class="stat-item">
+                    <span class="stat-label">Health:</span>
+                    <span class="stat-value health-indicator" id="footer-health">Good</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer-section footer-links links-visible">
+            <nav class="footer-nav" aria-label="Footer navigation">
+                <a href="/health" class="footer-link">
+                    <span class="link-icon" aria-hidden="true">🏥</span>
+                    <span class="link-text">System Health</span>
+                </a>
+                
+                <a href="/docs" class="footer-link">
+                    <span class="link-icon" aria-hidden="true">📚</span>
+                    <span class="link-text">Documentation</span>
+                </a>
+                
+                <a href="{{githubUrl}}" class="footer-link" target="_blank" rel="noopener noreferrer">
+                    <span class="link-icon" aria-hidden="true">🔗</span>
+                    <span class="link-text">Source Code</span>
+                </a>
+                
+                <a href="/settings" class="footer-link">
+                    <span class="link-icon" aria-hidden="true">⚙️</span>
+                    <span class="link-text">Settings</span>
+                </a>
+            </nav>
+        </div>
+        
+        <div class="footer-section footer-info">
+            <div class="copyright">
+                <p>&copy; {{year}} 7Gram Network</p>
+                <p class="last-updated">
+                    Last updated: <time id="footer-last-updated" datetime="{{timestamp}}">{{timestamp}}</time>
+                </p>
+            </div>
+            
+            <div class="version-info version-visible">
+                <p class="version-text">
+                    <span class="version-label">Dashboard</span>
+                    <span class="version-number">v{{version}}</span>
+                </p>
+                
+                <div class="status-indicators">
+                    <span class="connection-status" id="connection-indicator" title="Connection status">
+                        <span class="status-dot online" aria-hidden="true"></span>
+                        <span class="sr-only">Connected</span>
+                    </span>
+                    
+                    <span class="service-worker-status" id="sw-indicator" title="Service worker status">
+                        <span class="status-dot active" aria-hidden="true"></span>
+                        <span class="sr-only">Service worker active</span>
+                    </span>
+                </div>
+            </div>
+        </div>
     </div>
-    {{/if}}
     
-    {{#if showStats}}
-    <div class="footer-stats">
-        <small>
-            Services: <strong>{{serviceCount}}</strong> | 
-            Categories: <strong>{{categoryCount}}</strong> | 
-            Uptime: <strong id="uptime-display">{{uptime}}</strong>
-        </small>
+    <div class="footer-bottom">
+        <div class="footer-bottom-content">
+            <small class="legal-text">
+                This dashboard is for personal use only. All services are self-hosted and managed independently.
+            </small>
+            
+            <div class="footer-actions">
+                <button id="scroll-to-top" 
+                        class="scroll-to-top" 
+                        title="Scroll to top" 
+                        aria-label="Scroll to top of page"
+                        style="display: none;">
+                    <span aria-hidden="true">⬆️</span>
+                </button>
+            </div>
+        </div>
     </div>
-    {{/if}}
-    
-    {{#if showVersion}}
-    <div class="version-info">
-        <small>
-            Dashboard v{{version}} | 
-            <a href="{{githubUrl}}" target="_blank" rel="noopener noreferrer">
-                📖 Documentation
-            </a>
-        </small>
-    </div>
-    {{/if}}
-</div>
+</footer>

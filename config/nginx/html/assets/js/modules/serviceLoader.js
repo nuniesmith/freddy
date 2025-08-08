@@ -3,165 +3,255 @@ export class ServiceLoader {
     constructor() {
         this.servicesCache = new Map();
         this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+        this.loadingTimeout = 10000; // 10 seconds timeout for fetch requests
     }
 
     async loadAllServices() {
+        console.log('🔄 Starting service loading...');
+        
         try {
-            // Load from multiple sources
-            const [
-                configServices,
-                discoveredServices,
-                dynamicServices
-            ] = await Promise.allSettled([
-                this.loadConfigServices(),
-                this.discoverServices(),
-                this.loadDynamicServices()
-            ]);
+            // First try to get cached services
+            const cached = this.getCachedServices();
+            if (cached) {
+                console.log('✅ Using cached services');
+                return cached;
+            }
 
-            // Combine all services
+            // Load from multiple sources with better error handling
+            const serviceResults = await this.loadFromAllSources();
+            
+            // Combine and process services
             let allServices = [];
-            
-            if (configServices.status === 'fulfilled') {
-                allServices = [...allServices, ...configServices.value];
-            }
-            
-            if (discoveredServices.status === 'fulfilled') {
-                allServices = [...allServices, ...discoveredServices.value];
-            }
-            
-            if (dynamicServices.status === 'fulfilled') {
-                allServices = [...allServices, ...dynamicServices.value];
-            }
+            serviceResults.forEach(result => {
+                if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+                    allServices = [...allServices, ...result.value];
+                } else if (result.status === 'rejected') {
+                    console.warn('⚠️ Service source failed:', result.reason?.message);
+                }
+            });
 
-            // Remove duplicates and validate
+            console.log(`📥 Raw services loaded: ${allServices.length}`);
+
+            // Process services
             const uniqueServices = this.deduplicateServices(allServices);
-            const validatedServices = await this.validateServices(uniqueServices);
+            console.log(`🔄 After deduplication: ${uniqueServices.length}`);
+            
+            const validatedServices = this.validateServices(uniqueServices);
+            console.log(`✅ Validated services: ${validatedServices.length}`);
 
-            console.log(`📦 Loaded ${validatedServices.length} services from ${allServices.length} total`);
+            // Cache the results
+            this.setCachedServices(validatedServices);
+
             return validatedServices;
 
         } catch (error) {
             console.error('❌ Failed to load services:', error);
+            console.log('🔄 Using fallback services...');
             return this.getFallbackServices();
         }
     }
 
+    async loadFromAllSources() {
+        // Load from multiple sources in parallel
+        return await Promise.allSettled([
+            this.loadConfigServices(),
+            this.loadDiscoveredServices(),
+            this.loadDynamicServices()
+        ]);
+    }
+
     async loadConfigServices() {
+        console.log('🔄 Loading config services...');
+        
         try {
-            const response = await fetch('config/services.json');
-            if (!response.ok) throw new Error('Services config not found');
+            const response = await this.fetchWithTimeout('config/services.json');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             
             const config = await response.json();
-            return config.services || [];
+            
+            if (!config || !Array.isArray(config.services)) {
+                console.warn('⚠️ Invalid services config format');
+                return [];
+            }
+
+            console.log(`✅ Loaded ${config.services.length} services from config`);
+            
+            // Add source information
+            return config.services.map(service => ({
+                ...service,
+                source: 'config',
+                loadedAt: new Date().toISOString()
+            }));
+
         } catch (error) {
             console.warn('⚠️ Could not load services config:', error.message);
             return [];
         }
     }
 
-    async discoverServices() {
-        // Discover services from directory structure
+    async loadDiscoveredServices() {
+        console.log('🔄 Loading discovered services...');
+        
         try {
-            const response = await fetch('api/discover-services');
-            if (!response.ok) throw new Error('Service discovery API not available');
+            const response = await this.fetchWithTimeout('api/discover-services');
+            
+            if (!response.ok) {
+                throw new Error('Service discovery API not available');
+            }
             
             const discovered = await response.json();
-            return discovered.services || [];
+            
+            if (!discovered || !Array.isArray(discovered.services)) {
+                return [];
+            }
+
+            console.log(`✅ Discovered ${discovered.services.length} services`);
+            
+            return discovered.services.map(service => ({
+                ...service,
+                source: 'discovered',
+                discovered: true,
+                loadedAt: new Date().toISOString()
+            }));
+
         } catch (error) {
             console.warn('⚠️ Service discovery not available:', error.message);
-            // Fallback to checking known service directories
-            return await this.discoverFromKnownPaths();
-        }
-    }
-
-    async discoverFromKnownPaths() {
-        const knownServices = [
-            { path: 'services/media/', category: 'Media Services' },
-            { path: 'services/ai/', category: 'AI Services' },
-            { path: 'services/admin/', category: 'Media Management' },
-            { path: 'services/system/', category: 'System Services' }
-        ];
-
-        const discovered = [];
-        
-        for (const serviceDir of knownServices) {
-            try {
-                const services = await this.loadServicesFromDirectory(serviceDir.path, serviceDir.category);
-                discovered.push(...services);
-            } catch (error) {
-                console.warn(`⚠️ Could not load services from ${serviceDir.path}`);
-            }
-        }
-
-        return discovered;
-    }
-
-    async loadServicesFromDirectory(path, defaultCategory) {
-        try {
-            // Try to load an index.json from the directory
-            const response = await fetch(`${path}index.json`);
-            if (!response.ok) return [];
-
-            const dirConfig = await response.json();
-            
-            return (dirConfig.services || []).map(service => ({
-                ...service,
-                category: service.category || defaultCategory,
-                id: service.id || this.generateServiceId(service.name),
-                discovered: true,
-                discoveredFrom: path
-            }));
-        } catch (error) {
             return [];
         }
     }
 
     async loadDynamicServices() {
-        // Load services that might be added at runtime
+        console.log('🔄 Loading dynamic services...');
+        
         try {
-            const response = await fetch('api/dynamic-services');
-            if (!response.ok) return [];
+            const response = await this.fetchWithTimeout('api/dynamic-services');
+            
+            if (!response.ok) {
+                throw new Error('Dynamic services API not available');
+            }
             
             const dynamic = await response.json();
-            return dynamic.services || [];
+            
+            if (!dynamic || !Array.isArray(dynamic.services)) {
+                return [];
+            }
+
+            console.log(`✅ Loaded ${dynamic.services.length} dynamic services`);
+            
+            return dynamic.services.map(service => ({
+                ...service,
+                source: 'dynamic',
+                loadedAt: new Date().toISOString()
+            }));
+
         } catch (error) {
+            console.warn('⚠️ Dynamic services not available:', error.message);
             return [];
         }
     }
 
-    deduplicateServices(services) {
-        const seen = new Set();
-        return services.filter(service => {
-            const key = service.id || service.name || service.url;
-            if (seen.has(key)) {
-                return false;
+    // Fixed fetch with timeout
+    async fetchWithTimeout(url, options = {}) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.loadingTimeout);
+        
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                throw new Error(`Request timeout for ${url}`);
             }
-            seen.add(key);
-            return true;
-        });
+            throw error;
+        }
     }
 
-    async validateServices(services) {
+    deduplicateServices(services) {
+        console.log('🔄 Removing duplicate services...');
+        
+        const seen = new Map();
+        const unique = [];
+        
+        for (const service of services) {
+            // Create a unique key
+            const key = service.id || service.name || service.url;
+            
+            if (!key) {
+                console.warn('⚠️ Service missing identifier:', service);
+                continue;
+            }
+            
+            if (seen.has(key)) {
+                const existing = seen.get(key);
+                console.log(`🔄 Duplicate service found: ${key} (keeping ${existing.source || 'unknown'} over ${service.source || 'unknown'})`);
+                continue;
+            }
+            
+            seen.set(key, service);
+            unique.push(service);
+        }
+        
+        return unique;
+    }
+
+    validateServices(services) {
+        console.log('🔄 Validating services...');
+        
         const validatedServices = [];
+        let validationErrors = 0;
         
         for (const service of services) {
             try {
-                const validated = await this.validateService(service);
+                const validated = this.validateService(service);
                 if (validated) {
                     validatedServices.push(validated);
                 }
             } catch (error) {
-                console.warn(`⚠️ Service validation failed for ${service.name}:`, error.message);
+                validationErrors++;
+                console.warn(`⚠️ Service validation failed for ${service.name || 'unknown'}:`, error.message);
+                console.debug('❌ Invalid service data:', service);
             }
+        }
+
+        if (validationErrors > 0) {
+            console.warn(`⚠️ ${validationErrors} services failed validation`);
         }
 
         return validatedServices;
     }
 
-    async validateService(service) {
-        // Ensure required fields
-        if (!service.name || !service.url) {
-            throw new Error('Service missing required fields (name, url)');
+    validateService(service) {
+        // More robust validation with better error messages
+        if (!service) {
+            throw new Error('Service is null or undefined');
+        }
+
+        if (typeof service !== 'object') {
+            throw new Error('Service must be an object');
+        }
+
+        // Check required fields with specific error messages
+        if (!service.name || typeof service.name !== 'string' || service.name.trim() === '') {
+            throw new Error('Service missing required field: name (must be a non-empty string)');
+        }
+
+        if (!service.url || typeof service.url !== 'string' || service.url.trim() === '') {
+            throw new Error('Service missing required field: url (must be a non-empty string)');
+        }
+
+        // Validate URL format
+        try {
+            new URL(service.url);
+        } catch (error) {
+            throw new Error(`Invalid URL format: ${service.url}`);
         }
 
         // Generate ID if missing
@@ -169,85 +259,67 @@ export class ServiceLoader {
             service.id = this.generateServiceId(service.name);
         }
 
-        // Set defaults
+        // Create validated service with all required fields
         const validated = {
+            // Required fields
             id: service.id,
-            name: service.name,
+            name: service.name.trim(),
+            url: service.url.trim(),
+            
+            // Optional fields with defaults
             description: service.description || 'No description available',
-            url: service.url,
-            category: service.category || 'Other',
+            category: service.category || 'Other Services',
             categoryIcon: service.categoryIcon || '📦',
             categoryColor: service.categoryColor || 'system',
             icon: service.icon || '🔗',
             type: service.type || 'Service',
-            version: service.version,
             buttonText: service.buttonText || `Open ${service.name}`,
+            
+            // Status and health
             status: 'unknown',
-            tags: service.tags || [],
-            priority: service.priority || 0,
             healthCheck: service.healthCheck,
-            discovered: service.discovered || false,
-            lastUpdated: new Date().toISOString()
+            healthCheckInterval: service.healthCheckInterval || 120000,
+            healthCheckTimeout: service.healthCheckTimeout || 5000,
+            
+            // Metadata
+            version: service.version,
+            tags: Array.isArray(service.tags) ? service.tags : [],
+            priority: typeof service.priority === 'number' ? service.priority : 0,
+            
+            // Display options
+            showInDashboard: service.showInDashboard !== false, // Default to true
+            newWindow: service.newWindow !== false, // Default to true
+            critical: service.critical === true, // Default to false
+            
+            // Source tracking
+            source: service.source || 'unknown',
+            discovered: service.discovered === true,
+            loadedAt: service.loadedAt || new Date().toISOString(),
+            lastValidated: new Date().toISOString()
         };
 
-        // Perform health check if configured
-        if (service.healthCheck) {
-            try {
-                validated.status = await this.checkServiceHealth(service.healthCheck);
-            } catch (error) {
-                validated.status = 'error';
-                console.warn(`❌ Health check failed for ${service.name}`);
-            }
-        } else {
-            validated.status = 'healthy'; // Assume healthy if no health check
-        }
-
+        console.log(`✅ Validated service: ${validated.name} (${validated.id})`);
         return validated;
     }
 
-    async checkServiceHealth(healthCheck) {
-        if (typeof healthCheck === 'string') {
-            // Simple URL ping
-            try {
-                const response = await fetch(healthCheck, { 
-                    method: 'HEAD',
-                    timeout: 5000 
-                });
-                return response.ok ? 'healthy' : 'error';
-            } catch {
-                return 'error';
-            }
-        } else if (typeof healthCheck === 'object') {
-            // Advanced health check configuration
-            try {
-                const response = await fetch(healthCheck.url, {
-                    method: healthCheck.method || 'GET',
-                    timeout: healthCheck.timeout || 5000
-                });
-                
-                if (healthCheck.expectedStatus) {
-                    return response.status === healthCheck.expectedStatus ? 'healthy' : 'warning';
-                }
-                
-                return response.ok ? 'healthy' : 'error';
-            } catch {
-                return 'error';
-            }
+    generateServiceId(name) {
+        if (!name || typeof name !== 'string') {
+            return 'unknown-' + Date.now();
         }
         
-        return 'unknown';
-    }
-
-    generateServiceId(name) {
         return name.toLowerCase()
+                  .trim()
                   .replace(/[^a-z0-9]/g, '-')
                   .replace(/-+/g, '-')
-                  .replace(/^-|-$/g, '');
+                  .replace(/^-|-$/g, '')
+                  || 'service-' + Date.now();
     }
 
     getFallbackServices() {
-        // Return hardcoded services as fallback
-        return [
+        console.log('🔄 Loading fallback services...');
+        
+        // Return hardcoded services as fallback based on your config
+        const fallbackServices = [
             {
                 id: 'emby',
                 name: 'Emby',
@@ -257,7 +329,9 @@ export class ServiceLoader {
                 categoryIcon: '🎬',
                 categoryColor: 'media',
                 icon: '🎬',
-                status: 'healthy'
+                type: 'Media Server',
+                status: 'healthy',
+                source: 'fallback'
             },
             {
                 id: 'jellyfin',
@@ -268,10 +342,102 @@ export class ServiceLoader {
                 categoryIcon: '🎬',
                 categoryColor: 'media',
                 icon: '📺',
-                status: 'healthy'
+                type: 'Media Server',
+                status: 'healthy',
+                source: 'fallback'
             },
-            // Add more fallback services as needed
+            {
+                id: 'plex',
+                name: 'Plex',
+                description: 'Popular streaming media server with extensive features',
+                url: 'https://plex.7gram.xyz/web',
+                category: 'Media Services',
+                categoryIcon: '🎬',
+                categoryColor: 'media',
+                icon: '🍿',
+                type: 'Media Server',
+                status: 'healthy',
+                source: 'fallback'
+            },
+            {
+                id: 'openwebui',
+                name: 'Open WebUI',
+                description: 'ChatGPT-like AI interface with multiple model support',
+                url: 'https://ai.7gram.xyz',
+                category: 'AI Services',
+                categoryIcon: '🤖',
+                categoryColor: 'ai',
+                icon: '🚀',
+                type: 'AI Interface',
+                status: 'healthy',
+                source: 'fallback'
+            },
+            {
+                id: 'home-assistant',
+                name: 'Home Assistant',
+                description: 'Complete home automation platform',
+                url: 'https://home.7gram.xyz',
+                category: 'System Services',
+                categoryIcon: '🛠️',
+                categoryColor: 'system',
+                icon: '🏠',
+                type: 'Home Automation',
+                status: 'healthy',
+                source: 'fallback'
+            }
         ];
+
+        // Validate fallback services too
+        const validated = this.validateServices(fallbackServices);
+        console.log(`✅ Fallback services loaded: ${validated.length}`);
+        
+        return validated;
+    }
+
+    // Health checking with proper timeout
+    async checkServiceHealth(service) {
+        if (!service.healthCheck) {
+            return 'unknown';
+        }
+
+        const healthCheckUrl = typeof service.healthCheck === 'string' 
+            ? service.healthCheck 
+            : service.healthCheck.url;
+
+        if (!healthCheckUrl) {
+            return 'unknown';
+        }
+
+        try {
+            const response = await this.fetchWithTimeout(healthCheckUrl, {
+                method: 'HEAD',
+                mode: 'no-cors' // Handle CORS issues
+            });
+            
+            return response.ok ? 'healthy' : 'error';
+        } catch (error) {
+            console.warn(`❌ Health check failed for ${service.name}:`, error.message);
+            return 'error';
+        }
+    }
+
+    // Batch health check for all services
+    async updateServiceHealth(services) {
+        console.log('🔄 Updating service health...');
+        
+        const healthPromises = services.map(async (service) => {
+            const health = await this.checkServiceHealth(service);
+            return { ...service, status: health, lastHealthCheck: new Date().toISOString() };
+        });
+
+        try {
+            const updatedServices = await Promise.all(healthPromises);
+            console.log('✅ Service health updated');
+            return updatedServices;
+        } catch (error) {
+            console.warn('⚠️ Some health checks failed:', error);
+            return services; // Return original services if health check fails
+        }
     }
 
     // Cache management
@@ -280,11 +446,13 @@ export class ServiceLoader {
             data: services,
             timestamp: Date.now()
         });
+        console.log(`💾 Cached ${services.length} services`);
     }
 
     getCachedServices() {
         const cached = this.servicesCache.get('services');
         if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+            console.log('📋 Using cached services');
             return cached.data;
         }
         return null;
@@ -292,5 +460,44 @@ export class ServiceLoader {
 
     clearCache() {
         this.servicesCache.clear();
+        console.log('🗑️ Service cache cleared');
+    }
+
+    // Public API methods
+    async reloadServices() {
+        this.clearCache();
+        return await this.loadAllServices();
+    }
+
+    getServiceById(id) {
+        const cached = this.getCachedServices();
+        return cached ? cached.find(service => service.id === id) : null;
+    }
+
+    getServicesByCategory(category) {
+        const cached = this.getCachedServices();
+        return cached ? cached.filter(service => service.category === category) : [];
+    }
+
+    getServiceStats() {
+        const cached = this.getCachedServices();
+        if (!cached) return null;
+
+        const categories = new Set(cached.map(s => s.category));
+        const statuses = cached.reduce((acc, s) => {
+            acc[s.status] = (acc[s.status] || 0) + 1;
+            return acc;
+        }, {});
+
+        return {
+            totalServices: cached.length,
+            categoriesCount: categories.size,
+            categories: Array.from(categories),
+            statusCounts: statuses,
+            lastLoaded: this.servicesCache.get('services')?.timestamp
+        };
     }
 }
+
+// Export default for easier importing
+export default ServiceLoader;

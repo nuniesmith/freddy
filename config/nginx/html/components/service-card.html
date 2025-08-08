@@ -1,131 +1,115 @@
-<div class="card" data-service="{{id}}" data-category="{{category}}">
+<!-- components/service-card.html -->
+<div class="card service-card" data-service="{{id}}" data-category="{{category}}" data-status="{{status}}">
     <div class="card-header">
-        <h3 class="card-title">{{name}}</h3>
-        {{#if showStatus}}
-        <span class="service-status {{statusClass}}" title="Service Status: {{status}}">
-            {{statusIcon}}
-        </span>
-        {{/if}}
-    </div>
-    
-    <p class="card-description">{{description}}</p>
-    
-    {{#if showMeta}}
-    <div class="card-meta">
-        {{#if type}}
-        <span class="service-type">{{type}}</span>
-        {{/if}}
+        <div class="card-title-section">
+            <div class="service-icon">{{icon}}</div>
+            <h3 class="card-title">{{name}}</h3>
+        </div>
         
-        {{#if version}}
-        <span class="service-version">v{{version}}</span>
-        {{/if}}
+        <div class="card-status">
+            <span class="service-status status-{{status}}" 
+                  title="Service Status: {{status}}" 
+                  aria-label="Status: {{status}}">
+                <span class="status-icon">{{statusIcon}}</span>
+            </span>
+        </div>
+    </div>
+    
+    <div class="card-content">
+        <p class="card-description">{{description}}</p>
         
-        {{#if tags}}
-        {{#each tags}}
-        <span class="service-tag">#{{this}}</span>
-        {{/each}}
-        {{/if}}
+        <div class="card-meta">
+            <div class="meta-row">
+                <span class="service-type">{{type}}</span>
+                <span class="service-version">{{version}}</span>
+            </div>
+            
+            <div class="service-tags">
+                <!-- Tags will be populated by JavaScript -->
+            </div>
+        </div>
+        
+        <div class="health-indicator">
+            <div class="health-status">
+                <div class="health-dot health-{{healthStatus}}" aria-hidden="true"></div>
+                <span class="health-text">{{healthText}}</span>
+            </div>
+            <span class="response-time">{{responseTime}}</span>
+        </div>
+        
+        <div class="usage-info">
+            <small class="last-used">{{lastUsedText}}</small>
+            <small class="usage-count">{{usageCount}} uses</small>
+        </div>
     </div>
-    {{/if}}
-    
-    {{#if showHealth}}
-    <div class="health-indicator">
-        <div class="health-dot {{healthStatus}}"></div>
-        <span class="health-text">{{healthText}}</span>
-        {{#if responseTime}}
-        <span class="response-time">{{responseTime}}ms</span>
-        {{/if}}
-    </div>
-    {{/if}}
-    
-    {{#if showLastUsed}}
-    <div class="usage-info">
-        <small class="last-used">
-            {{#if lastUsed}}
-            Last used: {{lastUsed}}
-            {{else}}
-            Never used
-            {{/if}}
-        </small>
-        {{#if usageCount}}
-        <small class="usage-count">{{usageCount}} uses</small>
-        {{/if}}
-    </div>
-    {{/if}}
     
     <div class="card-actions">
         <a href="{{url}}" 
-           class="card-link {{categoryClass}}" 
-           target="_blank" 
-           rel="noopener noreferrer"
+           class="card-link primary-action {{categoryClass}}" 
+           target="{{linkTarget}}" 
+           rel="{{linkRel}}"
            data-service-id="{{id}}"
-           {{#if analyticsTrack}}data-track="service-click"{{/if}}>
-            {{icon}} {{buttonText}}
+           data-service-name="{{name}}"
+           aria-label="Open {{name}} service">
+            <span class="action-icon">{{icon}}</span>
+            <span class="action-text">{{buttonText}}</span>
         </a>
         
-        {{#if showQuickActions}}
         <div class="quick-actions">
-            {{#if canFavorite}}
             <button class="quick-action favorite-btn" 
                     data-service-id="{{id}}" 
                     data-action="toggle-favorite"
-                    title="{{#if isFavorite}}Remove from favorites{{else}}Add to favorites{{/if}}">
-                {{#if isFavorite}}⭐{{else}}☆{{/if}}
+                    aria-label="Toggle favorite"
+                    title="Add to favorites">
+                <span class="action-icon">☆</span>
             </button>
-            {{/if}}
             
-            {{#if canPin}}
             <button class="quick-action pin-btn" 
                     data-service-id="{{id}}" 
                     data-action="toggle-pin"
-                    title="{{#if isPinned}}Unpin service{{else}}Pin to top{{/if}}">
-                {{#if isPinned}}📌{{else}}📍{{/if}}
+                    aria-label="Pin service"
+                    title="Pin to top">
+                <span class="action-icon">📍</span>
             </button>
-            {{/if}}
             
-            {{#if showInfo}}
             <button class="quick-action info-btn" 
                     data-service-id="{{id}}" 
                     data-action="show-info"
-                    title="Service information">
-                ℹ️
+                    aria-label="Show service information"
+                    title="Service details">
+                <span class="action-icon">ℹ️</span>
             </button>
-            {{/if}}
         </div>
-        {{/if}}
     </div>
     
-    {{#if showDetails}}
-    <div class="service-details" style="display: none;">
-        {{#if dockerContainer}}
-        <div class="detail-item">
-            <strong>Container:</strong> {{dockerContainer}}
+    <div class="service-details" style="display: none;" id="details-{{id}}">
+        <div class="details-content">
+            <div class="detail-item">
+                <strong>URL:</strong> 
+                <a href="{{url}}" target="_blank" rel="noopener noreferrer">{{url}}</a>
+            </div>
+            
+            <div class="detail-item docker-info">
+                <strong>Container:</strong> {{dockerContainer}}
+            </div>
+            
+            <div class="detail-item port-info">
+                <strong>Port:</strong> {{port}}
+            </div>
+            
+            <div class="detail-item docs-info">
+                <strong>Documentation:</strong> 
+                <a href="{{documentation}}" target="_blank" rel="noopener noreferrer">
+                    📚 View Docs
+                </a>
+            </div>
+            
+            <div class="detail-item repo-info">
+                <strong>Source:</strong> 
+                <a href="{{repository}}" target="_blank" rel="noopener noreferrer">
+                    🔗 Repository
+                </a>
+            </div>
         </div>
-        {{/if}}
-        
-        {{#if port}}
-        <div class="detail-item">
-            <strong>Port:</strong> {{port}}
-        </div>
-        {{/if}}
-        
-        {{#if documentation}}
-        <div class="detail-item">
-            <strong>Docs:</strong> 
-            <a href="{{documentation}}" target="_blank" rel="noopener noreferrer">
-                📚 Documentation
-            </a>
-        </div>
-        {{/if}}
-        
-        {{#if repository}}
-        <div class="detail-item">
-            <strong>Source:</strong> 
-            <a href="{{repository}}" target="_blank" rel="noopener noreferrer">
-                🔗 Repository
-            </a>
-        </div>
-        {{/if}}
     </div>
-    {{/if}}
 </div>

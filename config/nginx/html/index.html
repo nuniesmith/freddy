@@ -8,8 +8,6 @@
     <meta name="author" content="nuniesmith">
     <meta name="robots" content="noindex, nofollow">
     
-    <!-- X-Frame-Options handled by nginx security headers, not meta tag -->
-    
     <!-- Accessibility and Color Scheme -->
     <meta name="color-scheme" content="light dark">
     
@@ -35,34 +33,21 @@
     
     <!-- Icons and Manifest -->
     <link rel="manifest" href="/manifest.json">
-    <!-- Favicon Fallback -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
     <link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/icons/icon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/icons/icon-16x16.png">
     <link rel="apple-touch-icon" href="/assets/images/icons/icon-192x192.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="/assets/images/icons/icon-152x152.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/icons/icon-192x192.png">
-    <link rel="mask-icon" href="/assets/images/icons/safari-pinned-tab.svg" color="#667eea">
     
     <title>🏠 7Gram Dashboard</title>
     
-    <!-- Critical CSS - Load First -->
-    <link rel="preload" href="assets/css/main.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <link rel="preload" href="assets/css/components.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    
-    <!-- Dynamic theme loading with system preference detection -->
+    <!-- Load CSS synchronously to prevent FOUC -->
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/components.css">
     <link rel="stylesheet" href="assets/css/themes/default.css" id="theme-stylesheet">
     
-    <!-- Fallback for preload -->
-    <noscript>
-        <link rel="stylesheet" href="assets/css/main.css">
-        <link rel="stylesheet" href="assets/css/components.css">
-    </noscript>
-    
-    <!-- Inline Critical CSS for First Paint -->
+    <!-- Critical inline styles -->
     <style>
-        /* Critical above-the-fold styles */
         body {
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -78,7 +63,6 @@
             flex-direction: column;
         }
         
-        /* Enhanced Loading Spinner */
         .loading-container {
             display: flex;
             flex-direction: column;
@@ -102,38 +86,11 @@
             animation: spin 1s linear infinite;
         }
         
-        .loading-dots {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 1rem;
-        }
-        
-        .loading-dots div {
-            width: 8px;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            animation: bounce 1.4s ease-in-out infinite both;
-        }
-        
-        .loading-dots div:nth-child(1) { animation-delay: -0.32s; }
-        .loading-dots div:nth-child(2) { animation-delay: -0.16s; }
-        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
         
-        @keyframes bounce {
-            0%, 80%, 100% {
-                transform: scale(0);
-            }
-            40% {
-                transform: scale(1);
-            }
-        }
-        
-        /* Loading text styles */
         .loading-text {
             color: rgba(255, 255, 255, 0.9);
             font-size: 1.2rem;
@@ -146,20 +103,6 @@
             font-size: 0.9rem;
         }
         
-        /* Accessibility improvements */
-        @media (prefers-reduced-motion: reduce) {
-            .spinner {
-                animation: none;
-                border: 4px solid rgba(255, 255, 255, 0.5);
-            }
-            
-            .loading-dots div {
-                animation: none;
-                opacity: 0.7;
-            }
-        }
-        
-        /* Error state styles */
         .error-container {
             display: none;
             flex-direction: column;
@@ -168,11 +111,6 @@
             min-height: 50vh;
             text-align: center;
             color: rgba(255, 255, 255, 0.9);
-        }
-        
-        .error-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
         }
         
         .retry-button {
@@ -191,66 +129,27 @@
             background: rgba(255, 255, 255, 0.3);
             transform: translateY(-2px);
         }
-        
-        /* Skip link styles */
-        .skip-link {
-            position: absolute;
-            top: -40px;
-            left: 6px;
-            background: white;
-            color: black;
-            padding: 8px;
-            z-index: 100;
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
+
+        /* Prevent FOUC */
+        .dashboard-content {
+            visibility: hidden;
         }
         
-        .skip-link:focus {
-            top: 6px;
-        }
-        
-        /* Keyboard navigation styles */
-        .keyboard-user *:focus {
-            outline: 2px solid rgba(255, 255, 255, 0.8);
-            outline-offset: 2px;
-            border-radius: 4px;
+        .dashboard-loaded .dashboard-content {
+            visibility: visible;
         }
     </style>
 </head>
 <body>
-    <!-- Accessibility: Skip to main content -->
-    <a href="#main-content" class="skip-link" tabindex="1">Skip to main content</a>
-    
-    <!-- Connection Status Indicator -->
-    <div id="connection-status" class="connection-status" role="status" aria-live="polite" style="display: none;">
-        <span id="connection-text">Checking connection...</span>
-    </div>
-    
-    <!-- Keyboard Shortcuts Help -->
-    <div id="keyboard-help" class="keyboard-help" style="display: none;" role="dialog" aria-labelledby="keyboard-help-title" aria-hidden="true">
-        <div class="keyboard-help-content">
-            <h3 id="keyboard-help-title">Keyboard Shortcuts</h3>
-            <ul>
-                <li><kbd>Ctrl</kbd> + <kbd>K</kbd> - Open search</li>
-                <li><kbd>Ctrl</kbd> + <kbd>T</kbd> - Toggle theme</li>
-                <li><kbd>Ctrl</kbd> + <kbd>R</kbd> - Refresh services</li>
-                <li><kbd>?</kbd> - Show this help</li>
-                <li><kbd>Esc</kbd> - Close dialogs</li>
-            </ul>
-            <button id="close-keyboard-help" class="close-button" aria-label="Close keyboard shortcuts help">×</button>
-        </div>
-    </div>
-    
     <div class="container">
-        <!-- Enhanced Header Component -->
+        <!-- Header -->
         <header id="dashboard-header" role="banner">
-            <!-- This will be loaded dynamically with enhanced features -->
+            <!-- Dynamic header content -->
         </header>
 
         <!-- Main Content -->
         <main id="main-content" role="main">
-            <!-- Real-time Status Bar -->
+            <!-- Status Bar -->
             <div id="status-bar" class="status-bar" style="display: none;">
                 <div class="status-item">
                     <span id="services-online">0</span> Online
@@ -266,12 +165,23 @@
                 </div>
             </div>
             
-            <!-- Search and Quick Actions -->
-            <div id="search-container" class="search-container" style="display: none;">
+            <!-- Search Container -->
+            <div id="search-container" class="search-container dashboard-content" style="display: none;">
                 <div class="search-wrapper">
+                    <!-- FIXED: Changed id to match what searchManager expects -->
+                    <input 
+                        type="text" 
+                        id="search" 
+                        placeholder="🔍 Search services... (Ctrl+K)"
+                        aria-label="Search services"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                    <!-- Also provide fallback ID -->
                     <input 
                         type="text" 
                         id="global-search" 
+                        style="display: none;"
                         placeholder="🔍 Search services... (Ctrl+K)"
                         aria-label="Search services"
                         autocomplete="off"
@@ -282,246 +192,103 @@
                 <div id="quick-filters" class="quick-filters"></div>
             </div>
             
-            <!-- Recommendations Section -->
-            <div id="recommendations-section" class="recommendations-section" style="display: none;">
-                <h2>Recommended for You</h2>
-                <div id="recommended-services" class="recommended-services"></div>
-            </div>
-            
-            <!-- Categories and services will be loaded dynamically -->
+            <!-- Services Container -->
             <div id="services-container" aria-live="polite">
-                <div class="loading-container">
+                <div class="loading-container" id="loading-container">
                     <div class="loading-spinner">
                         <div class="spinner" aria-hidden="true"></div>
                     </div>
                     <div class="loading-text">Loading 7Gram Dashboard...</div>
-                    <div class="loading-subtext">Discovering your services and checking their status</div>
-                    <div class="loading-dots" aria-hidden="true">
-                        <div></div>
-                        <div></div>
-                        <div></div>
-                    </div>
+                    <div class="loading-subtext" id="loading-status">Initializing...</div>
                 </div>
                 
                 <!-- Error State -->
                 <div class="error-container" id="error-container">
-                    <div class="error-icon">⚠️</div>
+                    <div style="font-size: 4rem;">⚠️</div>
                     <h3>Unable to Load Dashboard</h3>
                     <p id="error-message">Something went wrong while loading your services.</p>
-                    <button class="retry-button" id="retry-button" onclick="window.location.reload()">
+                    <button class="retry-button" onclick="location.reload()">
                         🔄 Retry
                     </button>
                 </div>
             </div>
         </main>
 
-        <!-- Enhanced No Results Message -->
-        <div id="no-results" class="no-results" style="display: none;" role="status">
-            <div class="no-results-content">
-                <div class="no-results-icon">🔍</div>
-                <h3>No services found</h3>
-                <p>No services match your search criteria.</p>
-                <div class="no-results-suggestions">
-                    <p>Try:</p>
-                    <ul>
-                        <li>Checking your spelling</li>
-                        <li>Using different keywords</li>
-                        <li>Browsing by category</li>
-                        <li>Clearing your search filters</li>
-                    </ul>
-                </div>
-                <button id="clear-search" class="clear-search-button">Clear Search</button>
-            </div>
-        </div>
-
-        <!-- Enhanced Footer Component -->
-        <footer id="dashboard-footer" role="contentinfo">
-            <!-- This will be loaded dynamically with system stats -->
+        <!-- Footer -->
+        <footer id="dashboard-footer" role="contentinfo" class="dashboard-content">
+            <!-- Dynamic footer content -->
         </footer>
     </div>
-    
-    <!-- Notification Container -->
-    <div id="notification-container" class="notification-container" aria-live="assertive"></div>
-    
-    <!-- Install PWA Prompt -->
-    <div id="install-prompt" class="install-prompt" style="display: none;">
-        <div class="install-prompt-content">
-            <div class="install-prompt-icon">📱</div>
-            <div class="install-prompt-text">
-                <h4>Install 7Gram Dashboard</h4>
-                <p>Add to your home screen for quick access</p>
-            </div>
-            <div class="install-prompt-actions">
-                <button id="install-button" class="install-button">Install</button>
-                <button id="dismiss-install" class="dismiss-button">Maybe Later</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Enhanced DashboardManager and Core Scripts -->
+    <!-- Fallback Dashboard (if modules fail) -->
     <script>
-        // Enhanced DashboardManager class with proper error handling
-        if (typeof window.DashboardManager === 'undefined') {
-            window.DashboardManager = class {
-                constructor(options = {}) {
-                    this.options = options;
-                    this.isInitialized = false;
-                    console.log('🚀 DashboardManager created with options:', options);
-                }
-                
-                showLoading() {
-                    const loadingContainer = document.querySelector('.loading-container');
-                    if (loadingContainer) {
-                        loadingContainer.style.display = 'flex';
-                    }
-                }
-                
-                hideLoading() {
-                    const loadingContainer = document.querySelector('.loading-container');
-                    if (loadingContainer) {
-                        loadingContainer.style.display = 'none';
-                    }
-                }
-                
-                async initialize() {
-                    if (this.isInitialized) {
-                        console.log('⚠️ Dashboard already initialized');
-                        return;
-                    }
-                    
-                    console.log('🔧 Initializing dashboard...');
-                    this.showLoading();
-                    
-                    try {
-                        await this.loadServices();
-                        await this.setupEventListeners();
-                        await this.checkHealth();
-                        
-                        this.isInitialized = true;
-                        this.hideLoading();
-                        console.log('✅ Dashboard initialized successfully');
-                    } catch (error) {
-                        this.hideLoading();
-                        this.showError('Failed to initialize dashboard', error.message);
-                        throw error;
-                    }
-                }
-                
-                async loadServices() {
-                    return new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            reject(new Error('Service loading timeout'));
-                        }, 10000);
-                        
-                        setTimeout(() => {
-                            clearTimeout(timeout);
-                            const container = document.getElementById('services-container');
-                            if (container) {
-                                container.innerHTML = `
-                                    <div style="text-align: center; padding: 2rem;">
-                                        <h2>🌐 7Gram Dashboard</h2>
-                                        <p>Your services will appear here once the dashboard modules are loaded.</p>
-                                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 2rem;">
-                                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
-                                                <h3>🎬 Media Services</h3>
-                                                <p>Emby, Jellyfin, Plex</p>
-                                                <div class="status-indicator" style="width: 10px; height: 10px; background: #4ade80; border-radius: 50%; margin: 0 auto; margin-top: 8px;"></div>
-                                            </div>
-                                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
-                                                <h3>🤖 AI Services</h3>
-                                                <p>Open WebUI, Ollama</p>
-                                                <div class="status-indicator" style="width: 10px; height: 10px; background: #4ade80; border-radius: 50%; margin: 0 auto; margin-top: 8px;"></div>
-                                            </div>
-                                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
-                                                <h3>🏠 Home Services</h3>
-                                                <p>Home Assistant, Pi-hole</p>
-                                                <div class="status-indicator" style="width: 10px; height: 10px; background: #4ade80; border-radius: 50%; margin: 0 auto; margin-top: 8px;"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                            resolve();
-                        }, 1000);
-                    });
-                }
-                
-                setupEventListeners() {
-                    // Global keyboard shortcuts
-                    document.addEventListener('keydown', (e) => {
-                        if (e.ctrlKey && e.key === 'k') {
-                            e.preventDefault();
-                            const searchInput = document.getElementById('global-search');
-                            if (searchInput) searchInput.focus();
-                        }
-                        
-                        if (e.key === 'Escape') {
-                            const modals = document.querySelectorAll('.modal, .overlay');
-                            modals.forEach(modal => modal.style.display = 'none');
-                        }
-                    });
-                    
-                    // Service health checks
-                    setInterval(() => this.updateServiceStatus(), 30000);
-                }
-                
-                async checkHealth() {
-                    try {
-                        const response = await fetch('/health', { 
-                            method: 'GET',
-                            headers: { 'Accept': 'application/json' }
-                        });
-                        
-                        if (response.ok) {
-                            console.log('✅ Health check passed');
-                            return true;
-                        } else {
-                            console.warn('⚠️ Health check failed with status:', response.status);
-                            return false;
-                        }
-                    } catch (error) {
-                        console.error('❌ Health check error:', error.message);
-                        return false;
-                    }
-                }
-                
-                updateServiceStatus() {
-                    const indicators = document.querySelectorAll('.status-indicator');
-                    indicators.forEach(indicator => {
-                        // Simulate status updates
-                        const isHealthy = Math.random() > 0.1; // 90% uptime simulation
-                        indicator.style.background = isHealthy ? '#4ade80' : '#f87171';
-                    });
-                }
-                
-                showError(message, details = null) {
-                    const loadingContainer = document.querySelector('.loading-container');
-                    const errorContainer = document.getElementById('error-container');
-                    const errorMessage = document.getElementById('error-message');
-                    
-                    if (loadingContainer) loadingContainer.style.display = 'none';
-                    if (errorContainer) errorContainer.style.display = 'flex';
-                    if (errorMessage) {
-                        errorMessage.textContent = message;
-                        
-                        if (details) {
-                            const detailsEl = document.createElement('details');
-                            detailsEl.innerHTML = `
-                                <summary style="cursor: pointer; margin-bottom: 0.5rem;">Technical Details</summary>
-                                <pre style="text-align: left; font-size: 0.8rem; margin-top: 0.5rem; white-space: pre-wrap; word-wrap: break-word;">${details}</pre>
-                            `;
-                            errorMessage.appendChild(detailsEl);
-                        }
-                    }
-                    
-                    console.error('Dashboard Error:', message, details);
-                }
-            };
+        // Fallback timeout to prevent infinite loading
+        let fallbackTimeout = setTimeout(() => {
+            console.warn('⚠️ Fallback activated: Modules took too long to load');
+            showFallbackDashboard();
+        }, 15000); // 15 second timeout
+
+        function clearFallbackTimeout() {
+            if (fallbackTimeout) {
+                clearTimeout(fallbackTimeout);
+                fallbackTimeout = null;
+            }
         }
 
-        // Enhanced error handling function
+        function updateLoadingStatus(message) {
+            const statusEl = document.getElementById('loading-status');
+            if (statusEl) {
+                statusEl.textContent = message;
+            }
+        }
+
+        function showFallbackDashboard() {
+            clearFallbackTimeout();
+            const container = document.getElementById('services-container');
+            if (container) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.9);">
+                        <h2>🌐 7Gram Dashboard</h2>
+                        <p>Fallback mode activated. Some features may be limited.</p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 2rem;">
+                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+                                <h3>🎬 Media Services</h3>
+                                <p>Emby, Jellyfin, Plex</p>
+                                <a href="https://emby.7gram.xyz" target="_blank" style="color: white; text-decoration: none; background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; margin-top: 1rem;">Open Emby</a>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+                                <h3>🤖 AI Services</h3>
+                                <p>Open WebUI, Ollama</p>
+                                <a href="https://ai.7gram.xyz" target="_blank" style="color: white; text-decoration: none; background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; margin-top: 1rem;">Open AI</a>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+                                <h3>🏠 Home Services</h3>
+                                <p>Home Assistant, Pi-hole</p>
+                                <a href="https://home.7gram.xyz" target="_blank" style="color: white; text-decoration: none; background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 20px; display: inline-block; margin-top: 1rem;">Open Home</a>
+                            </div>
+                        </div>
+                        <div style="margin-top: 2rem;">
+                            <button onclick="location.reload()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.75rem 1.5rem; border-radius: 25px; cursor: pointer; font-size: 1rem;">
+                                🔄 Try Again
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            document.body.classList.add('dashboard-loaded');
+        }
+
+        function hideLoading() {
+            const loadingContainer = document.getElementById('loading-container');
+            if (loadingContainer) {
+                loadingContainer.style.display = 'none';
+            }
+            document.body.classList.add('dashboard-loaded');
+        }
+
         function showError(message, details = null) {
-            const loadingContainer = document.querySelector('.loading-container');
+            clearFallbackTimeout();
+            const loadingContainer = document.getElementById('loading-container');
             const errorContainer = document.getElementById('error-container');
             const errorMessage = document.getElementById('error-message');
             
@@ -529,248 +296,110 @@
             if (errorContainer) errorContainer.style.display = 'flex';
             if (errorMessage) {
                 errorMessage.textContent = message;
-                
                 if (details) {
                     const detailsEl = document.createElement('details');
                     detailsEl.innerHTML = `
                         <summary style="cursor: pointer; margin-bottom: 0.5rem;">Technical Details</summary>
-                        <pre style="text-align: left; font-size: 0.8rem; margin-top: 0.5rem; white-space: pre-wrap; word-wrap: break-word;">${details}</pre>
+                        <pre style="text-align: left; font-size: 0.8rem; margin-top: 0.5rem; white-space: pre-wrap;">${details}</pre>
                     `;
                     errorMessage.appendChild(detailsEl);
                 }
             }
-            
             console.error('Dashboard Error:', message, details);
         }
     </script>
 
-    <!-- Service Worker Registration -->
+    <!-- Load modules with better error handling -->
     <script>
-        // Service Worker Registration with enhanced error handling
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', async () => {
-                try {
-                    const registration = await navigator.serviceWorker.register('/sw.js', {
-                        scope: '/'
-                    });
-                    
-                    console.log('✅ Service Worker registered successfully:', registration.scope);
-                    
-                    // Listen for updates
-                    registration.addEventListener('updatefound', () => {
-                        const newWorker = registration.installing;
-                        if (newWorker) {
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New content available, show update notification
-                                    showUpdateNotification();
-                                }
-                            });
-                        }
-                    });
-                    
-                } catch (error) {
-                    console.warn('⚠️ Service Worker registration failed:', error);
+        // Update loading status
+        updateLoadingStatus('Loading JavaScript modules...');
+
+        // Load modules sequentially with fallbacks
+        async function loadDashboard() {
+            try {
+                // Try to load main.js first (most important)
+                updateLoadingStatus('Loading main module...');
+                const mainScript = document.createElement('script');
+                mainScript.src = './assets/js/main.js';
+                mainScript.type = 'module';
+                
+                await new Promise((resolve, reject) => {
+                    mainScript.onload = resolve;
+                    mainScript.onerror = reject;
+                    document.head.appendChild(mainScript);
+                });
+                
+                console.log('✅ Main module loaded');
+                
+                // Load other modules
+                const modules = [
+                    { name: 'serviceLoader', path: './assets/js/modules/serviceLoader.js' },
+                    { name: 'searchManager', path: './assets/js/modules/searchManager.js' },
+                    { name: 'themeManager', path: './assets/js/modules/themeManager.js' },
+                    { name: 'componentLoader', path: './assets/js/modules/componentLoader.js' },
+                    { name: 'healthChecker', path: './assets/js/modules/healthChecker.js' }
+                ];
+                
+                for (const module of modules) {
+                    try {
+                        updateLoadingStatus(`Loading ${module.name}...`);
+                        const script = document.createElement('script');
+                        script.src = module.path;
+                        script.type = 'module';
+                        
+                        await new Promise((resolve, reject) => {
+                            script.onload = resolve;
+                            script.onerror = reject;
+                            document.head.appendChild(script);
+                        });
+                        
+                        console.log(`✅ ${module.name} module loaded`);
+                    } catch (error) {
+                        console.warn(`⚠️ Failed to load ${module.name}:`, error);
+                        // Continue loading other modules
+                    }
                 }
-            });
+                
+                updateLoadingStatus('Finalizing...');
+                
+                // Give modules time to initialize
+                setTimeout(() => {
+                    clearFallbackTimeout();
+                    hideLoading();
+                    console.log('✅ Dashboard loading complete');
+                }, 1000);
+                
+            } catch (error) {
+                console.error('❌ Failed to load dashboard:', error);
+                showError('Failed to load dashboard modules. Using fallback mode.');
+                setTimeout(showFallbackDashboard, 2000);
+            }
         }
-        
-        // PWA Install Prompt
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            document.getElementById('install-prompt').style.display = 'block';
-        });
-        
+
+        // Start loading when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadDashboard);
+        } else {
+            loadDashboard();
+        }
+
         // Global error handling
         window.addEventListener('error', (event) => {
             console.error('❌ Global error:', event.error);
-            showError('An unexpected error occurred. Please refresh the page.');
         });
-        
+
         window.addEventListener('unhandledrejection', (event) => {
             console.error('❌ Unhandled promise rejection:', event.reason);
-            showError('A network error occurred. Please check your connection.');
-        });
-        
-        // Connection monitoring
-        window.addEventListener('online', () => {
-            hideConnectionStatus();
-            showNotification('Connection restored', 'success');
-        });
-        
-        window.addEventListener('offline', () => {
-            showConnectionStatus('You are offline. Some features may not work.', 'offline');
-        });
-        
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (event) => {
-            // Skip if user is typing in an input
-            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-                return;
-            }
-            
-            if (event.ctrlKey || event.metaKey) {
-                switch (event.key.toLowerCase()) {
-                    case 'k':
-                        event.preventDefault();
-                        document.getElementById('global-search')?.focus();
-                        break;
-                    case 't':
-                        event.preventDefault();
-                        toggleTheme();
-                        break;
-                    case 'r':
-                        event.preventDefault();
-                        refreshServices();
-                        break;
-                }
-            } else if (event.key === '?') {
-                event.preventDefault();
-                toggleKeyboardHelp();
-            } else if (event.key === 'Escape') {
-                closeAllDialogs();
-            }
-        });
-        
-        // Accessibility: Detect keyboard navigation
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Tab') {
-                document.body.classList.add('keyboard-user');
-            }
-        });
-        
-        document.addEventListener('mousedown', () => {
-            document.body.classList.remove('keyboard-user');
-        });
-        
-        // Utility functions
-        function showConnectionStatus(message, type) {
-            const statusEl = document.getElementById('connection-status');
-            const textEl = document.getElementById('connection-text');
-            textEl.textContent = message;
-            statusEl.className = `connection-status ${type}`;
-            statusEl.style.display = 'block';
-        }
-        
-        function hideConnectionStatus() {
-            document.getElementById('connection-status').style.display = 'none';
-        }
-        
-        function showNotification(message, type = 'info') {
-            // This will be implemented by the notification system
-            console.log(`Notification (${type}): ${message}`);
-        }
-        
-        function showUpdateNotification() {
-            showNotification('A new version is available. Refresh to update.', 'info');
-        }
-        
-        function toggleTheme() {
-            // This will be implemented by the theme manager
-            console.log('Toggle theme');
-        }
-        
-        function refreshServices() {
-            // This will be implemented by the service manager
-            console.log('Refresh services');
-        }
-        
-        function toggleKeyboardHelp() {
-            const helpEl = document.getElementById('keyboard-help');
-            const isVisible = helpEl.style.display !== 'none';
-            helpEl.style.display = isVisible ? 'none' : 'block';
-            helpEl.setAttribute('aria-hidden', isVisible ? 'true' : 'false');
-        }
-        
-        function closeAllDialogs() {
-            document.getElementById('keyboard-help').style.display = 'none';
-            document.getElementById('keyboard-help').setAttribute('aria-hidden', 'true');
-        }
-        
-        // PWA Install handlers
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('install-button')?.addEventListener('click', async () => {
-                if (deferredPrompt) {
-                    deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    console.log(`PWA install outcome: ${outcome}`);
-                    deferredPrompt = null;
-                    document.getElementById('install-prompt').style.display = 'none';
-                }
-            });
-            
-            document.getElementById('dismiss-install')?.addEventListener('click', () => {
-                document.getElementById('install-prompt').style.display = 'none';
-                // Note: localStorage removed for Claude.ai compatibility
-            });
-            
-            document.getElementById('close-keyboard-help')?.addEventListener('click', toggleKeyboardHelp);
-            
-            document.getElementById('clear-search')?.addEventListener('click', () => {
-                document.getElementById('global-search').value = '';
-                document.getElementById('global-search').dispatchEvent(new Event('input'));
-            });
         });
     </script>
 
-    <!-- Core JavaScript Modules with Enhanced Loading -->
-    <script type="module">
-        // Enhanced module loading with error handling and performance monitoring
-        const moduleLoadingStart = performance.now();
-        const modules = {};
-        
-        async function loadModule(name, path) {
-            try {
-                const module = await import(path);
-                modules[name] = module;
-                console.log(`✅ ${name} module loaded`);
-                return module;
-            } catch (error) {
-                console.error(`❌ Failed to load ${name} module:`, error);
-                showError(`Failed to load ${name}. Please refresh the page.`);
-                throw error;
-            }
-        }
-        
-        // Load all modules
-        try {
-            await Promise.all([
-                loadModule('main', './assets/js/main.js'),
-                loadModule('serviceLoader', './assets/js/modules/serviceLoader.js'),
-                loadModule('searchManager', './assets/js/modules/searchManager.js'),
-                loadModule('themeManager', './assets/js/modules/themeManager.js'),
-                loadModule('componentLoader', './assets/js/modules/componentLoader.js'),
-                loadModule('healthChecker', './assets/js/modules/healthChecker.js')
-            ]);
-            
-            const moduleLoadingTime = performance.now() - moduleLoadingStart;
-            console.log(`📊 All modules loaded in ${moduleLoadingTime.toFixed(2)}ms`);
-            
-            // Initialize the dashboard with enhanced features
-            const { DashboardManager } = modules.main;
-            const dashboard = new DashboardManager({
-                realTimeUpdates: true,
-                smartRecommendations: true,
-                usageAnalytics: true,
-                performanceMonitoring: true,
-                enhancedSearch: true,
-                keyboardShortcuts: true,
-                accessibility: true
-            });
-            
-            await dashboard.initialize();
-            
-        } catch (error) {
-            console.error('❌ Critical error during initialization:', error);
-            showError('Dashboard initialization failed. Please refresh the page.');
+    <!-- Service Worker (simplified) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('✅ Service Worker registered'))
+                .catch(err => console.warn('⚠️ Service Worker registration failed:', err));
         }
     </script>
-    
-    <!-- Preload critical resources -->
-    <link rel="prefetch" href="config/services.json">
-    <link rel="prefetch" href="config/dashboard.json ">
-    <link rel="prefetch" href="config/themes.json">
 </body>
 </html>

@@ -4,10 +4,11 @@ export class SearchManager {
         this.services = [];
         this.categories = [];
         this.searchIndex = new Map();
-        this.recentSearches = this.loadRecentSearches();
+        this.recentSearches = []; // In-memory storage instead of localStorage
         this.searchSuggestions = [];
         this.debounceTimer = null;
         this.minSearchLength = 1;
+        this.searchAnalytics = []; // In-memory storage for analytics
     }
 
     initialize(services, categories) {
@@ -40,13 +41,24 @@ export class SearchManager {
     }
 
     setupSearchInput() {
-        const searchInput = document.getElementById('search-input');
-        const searchSuggestions = document.getElementById('search-suggestions');
+        // Try multiple possible search input IDs to be robust
+        const possibleIds = ['search', 'global-search', 'search-input'];
+        let searchInput = null;
+        
+        for (const id of possibleIds) {
+            searchInput = document.getElementById(id);
+            if (searchInput) {
+                console.log(`✅ Found search input with ID: ${id}`);
+                break;
+            }
+        }
         
         if (!searchInput) {
             console.warn('⚠️ Search input not found');
             return;
         }
+
+        const searchSuggestions = document.getElementById('search-suggestions');
 
         // Input event with debouncing
         searchInput.addEventListener('input', (e) => {
@@ -72,6 +84,9 @@ export class SearchManager {
         searchInput.addEventListener('keydown', (e) => {
             this.handleSearchNavigation(e);
         });
+
+        // Store reference for later use
+        this.searchInputElement = searchInput;
     }
 
     setupKeyboardShortcuts() {
@@ -79,23 +94,49 @@ export class SearchManager {
             // Ctrl+K or Cmd+K to focus search
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                const searchInput = document.getElementById('search-input');
-                if (searchInput) {
-                    searchInput.focus();
-                    searchInput.select();
-                }
+                this.focusSearch();
             }
 
             // Escape to clear search
             if (e.key === 'Escape') {
-                const searchInput = document.getElementById('search-input');
-                if (searchInput && document.activeElement === searchInput) {
-                    searchInput.value = '';
-                    this.performSearch('');
-                    searchInput.blur();
-                }
+                this.clearAndBlurSearch();
             }
         });
+    }
+
+    focusSearch() {
+        const searchInput = this.getSearchInput();
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    }
+
+    clearAndBlurSearch() {
+        const searchInput = this.getSearchInput();
+        if (searchInput && document.activeElement === searchInput) {
+            searchInput.value = '';
+            this.performSearch('');
+            searchInput.blur();
+        }
+    }
+
+    getSearchInput() {
+        // Return cached reference if available
+        if (this.searchInputElement && this.searchInputElement.isConnected) {
+            return this.searchInputElement;
+        }
+
+        // Try to find it again
+        const possibleIds = ['search', 'global-search', 'search-input'];
+        for (const id of possibleIds) {
+            const element = document.getElementById(id);
+            if (element) {
+                this.searchInputElement = element;
+                return element;
+            }
+        }
+        return null;
     }
 
     performSearch(query) {
@@ -175,7 +216,7 @@ export class SearchManager {
 
     displaySearchResults(results, query) {
         const categories = document.querySelectorAll('.category');
-        const cards = document.querySelectorAll('.card');
+        const cards = document.querySelectorAll('.card, .service-card');
         const noResults = document.getElementById('no-results');
 
         if (results.length === 0) {
@@ -202,7 +243,20 @@ export class SearchManager {
         const visibleCategories = new Set();
         
         results.forEach(service => {
-            const card = document.querySelector(`[data-service="${service.id}"]`);
+            // Try multiple possible selectors for service cards
+            const possibleSelectors = [
+                `[data-service="${service.id}"]`,
+                `[data-service-id="${service.id}"]`,
+                `#service-${service.id}`,
+                `.service-${service.id}`
+            ];
+            
+            let card = null;
+            for (const selector of possibleSelectors) {
+                card = document.querySelector(selector);
+                if (card) break;
+            }
+
             if (card) {
                 card.style.display = 'flex';
                 
@@ -220,8 +274,8 @@ export class SearchManager {
 
         // Update category headers with result counts
         visibleCategories.forEach(category => {
-            const visibleCards = category.querySelectorAll('.card[style*="flex"]').length;
-            const categoryTitle = category.querySelector('.category-title');
+            const visibleCards = category.querySelectorAll('.card[style*="flex"], .service-card[style*="flex"]').length;
+            const categoryTitle = category.querySelector('.category-title, .category-header h2, h2');
             if (categoryTitle) {
                 const originalText = categoryTitle.textContent.replace(/ \(\d+\)$/, '');
                 categoryTitle.textContent = `${originalText} (${visibleCards})`;
@@ -232,8 +286,8 @@ export class SearchManager {
     highlightSearchTerms(card, query) {
         const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 0);
         const elementsToHighlight = [
-            card.querySelector('.card-title'),
-            card.querySelector('.card-description')
+            card.querySelector('.card-title, .service-title, h3'),
+            card.querySelector('.card-description, .service-description, p')
         ].filter(el => el);
 
         elementsToHighlight.forEach(element => {
@@ -245,7 +299,7 @@ export class SearchManager {
             
             searchTerms.forEach(term => {
                 const regex = new RegExp(`(${this.escapeRegex(term)})`, 'gi');
-                highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
+                highlightedText = highlightedText.replace(regex, '<mark style="background: rgba(255,255,0,0.3); padding: 1px 2px; border-radius: 2px;">$1</mark>');
             });
             
             element.innerHTML = highlightedText;
@@ -258,7 +312,7 @@ export class SearchManager {
 
     showAllServices() {
         const categories = document.querySelectorAll('.category');
-        const cards = document.querySelectorAll('.card');
+        const cards = document.querySelectorAll('.card, .service-card');
         const noResults = document.getElementById('no-results');
 
         // Show everything
@@ -276,7 +330,7 @@ export class SearchManager {
 
         // Reset category titles
         categories.forEach(category => {
-            const categoryTitle = category.querySelector('.category-title');
+            const categoryTitle = category.querySelector('.category-title, .category-header h2, h2');
             if (categoryTitle) {
                 categoryTitle.textContent = categoryTitle.textContent.replace(/ \(\d+\)$/, '');
             }
@@ -285,8 +339,8 @@ export class SearchManager {
 
     removeHighlighting(card) {
         const elementsToUnhighlight = [
-            card.querySelector('.card-title'),
-            card.querySelector('.card-description')
+            card.querySelector('.card-title, .service-title, h3'),
+            card.querySelector('.card-description, .service-description, p')
         ].filter(el => el);
 
         elementsToUnhighlight.forEach(element => {
@@ -317,7 +371,7 @@ export class SearchManager {
                 suggestions.push({
                     type: 'service',
                     text: service.name,
-                    icon: service.icon,
+                    icon: service.icon || '🔗',
                     service: service
                 });
             }
@@ -330,7 +384,7 @@ export class SearchManager {
                 suggestions.push({
                     type: 'category',
                     text: category.name,
-                    icon: category.icon
+                    icon: category.icon || '📁'
                 });
             }
         });
@@ -348,9 +402,9 @@ export class SearchManager {
         }
 
         const suggestionsHtml = suggestions.map(suggestion => `
-            <div class="search-suggestion" data-type="${suggestion.type}" data-text="${suggestion.text}">
+            <div class="search-suggestion" data-type="${suggestion.type}" data-text="${this.escapeHtml(suggestion.text)}">
                 <span class="suggestion-icon">${suggestion.icon}</span>
-                <span class="suggestion-text">${suggestion.text}</span>
+                <span class="suggestion-text">${this.escapeHtml(suggestion.text)}</span>
                 <span class="suggestion-type">${suggestion.type}</span>
             </div>
         `).join('');
@@ -362,7 +416,7 @@ export class SearchManager {
         suggestionsElement.querySelectorAll('.search-suggestion').forEach(suggestion => {
             suggestion.addEventListener('click', () => {
                 const text = suggestion.dataset.text;
-                const searchInput = document.getElementById('search-input');
+                const searchInput = this.getSearchInput();
                 if (searchInput) {
                     searchInput.value = text;
                     this.performSearch(text);
@@ -373,7 +427,7 @@ export class SearchManager {
     }
 
     showSearchSuggestions() {
-        const searchInput = document.getElementById('search-input');
+        const searchInput = this.getSearchInput();
         const suggestionsElement = document.getElementById('search-suggestions');
         
         if (searchInput && suggestionsElement && searchInput.value.trim()) {
@@ -428,12 +482,25 @@ export class SearchManager {
         const noResults = document.getElementById('no-results');
         if (noResults) {
             noResults.innerHTML = `
-                <h3>🔍 No services found</h3>
-                <p>No services match "<strong>${this.escapeHtml(query)}</strong>".</p>
-                <p>Try a different search term or browse all services.</p>
-                <button onclick="document.getElementById('search-input').value = ''; window.searchManager.performSearch('');" class="clear-search-btn">
-                    Clear Search
-                </button>
+                <div class="no-results-content">
+                    <div class="no-results-icon">🔍</div>
+                    <h3>No services found</h3>
+                    <p>No services match "<strong>${this.escapeHtml(query)}</strong>".</p>
+                    <div class="no-results-suggestions">
+                        <p>Try:</p>
+                        <ul>
+                            <li>Checking your spelling</li>
+                            <li>Using different keywords</li>
+                            <li>Browsing by category</li>
+                            <li>Clearing your search filters</li>
+                        </ul>
+                    </div>
+                    <button onclick="document.getElementById('search').value = ''; window.searchManager.performSearch(''); document.getElementById('global-search').value = '';" 
+                            class="clear-search-button"
+                            style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.75rem 1.5rem; border-radius: 25px; cursor: pointer; font-size: 1rem; margin-top: 1rem;">
+                        Clear Search
+                    </button>
+                </div>
             `;
         }
     }
@@ -447,7 +514,7 @@ export class SearchManager {
             .replace(/'/g, "&#039;");
     }
 
-    // Recent searches management
+    // Recent searches management (in-memory)
     addToRecentSearches(query) {
         const lowerQuery = query.toLowerCase();
         
@@ -459,35 +526,17 @@ export class SearchManager {
         
         // Keep only last 10
         this.recentSearches = this.recentSearches.slice(0, 10);
-        
-        // Save to localStorage
-        this.saveRecentSearches();
-    }
-
-    loadRecentSearches() {
-        try {
-            const saved = localStorage.getItem('7gram-recent-searches');
-            return saved ? JSON.parse(saved) : [];
-        } catch (error) {
-            console.warn('⚠️ Failed to load recent searches:', error);
-            return [];
-        }
-    }
-
-    saveRecentSearches() {
-        try {
-            localStorage.setItem('7gram-recent-searches', JSON.stringify(this.recentSearches));
-        } catch (error) {
-            console.warn('⚠️ Failed to save recent searches:', error);
-        }
     }
 
     clearRecentSearches() {
         this.recentSearches = [];
-        this.saveRecentSearches();
     }
 
-    // Analytics
+    getRecentSearches() {
+        return [...this.recentSearches];
+    }
+
+    // Analytics (in-memory)
     trackSearch(query, resultCount) {
         const searchEvent = {
             query: query,
@@ -499,29 +548,45 @@ export class SearchManager {
         // Log for debugging
         console.log(`🔍 Search: "${query}" → ${resultCount} results`);
 
-        // Store search analytics
-        this.storeSearchAnalytics(searchEvent);
-    }
-
-    storeSearchAnalytics(event) {
-        try {
-            const analytics = JSON.parse(localStorage.getItem('7gram-search-analytics') || '[]');
-            analytics.push(event);
-            
-            // Keep only last 100 searches
-            const recentAnalytics = analytics.slice(-100);
-            localStorage.setItem('7gram-search-analytics', JSON.stringify(recentAnalytics));
-        } catch (error) {
-            console.warn('⚠️ Failed to store search analytics:', error);
+        // Store search analytics in memory
+        this.searchAnalytics.push(searchEvent);
+        
+        // Keep only last 100 searches
+        if (this.searchAnalytics.length > 100) {
+            this.searchAnalytics = this.searchAnalytics.slice(-100);
         }
     }
 
     getSearchAnalytics() {
-        try {
-            return JSON.parse(localStorage.getItem('7gram-search-analytics') || '[]');
-        } catch (error) {
-            console.warn('⚠️ Failed to load search analytics:', error);
-            return [];
+        return [...this.searchAnalytics];
+    }
+
+    // Public API methods
+    clearSearch() {
+        const searchInput = this.getSearchInput();
+        if (searchInput) {
+            searchInput.value = '';
+            this.performSearch('');
         }
     }
+
+    search(query) {
+        const searchInput = this.getSearchInput();
+        if (searchInput) {
+            searchInput.value = query;
+            this.performSearch(query);
+        }
+    }
+
+    getSearchStats() {
+        return {
+            totalSearches: this.searchAnalytics.length,
+            recentSearchCount: this.recentSearches.length,
+            indexedServices: this.searchIndex.size,
+            lastSearch: this.searchAnalytics[this.searchAnalytics.length - 1]
+        };
+    }
 }
+
+// Export default for easier importing
+export default SearchManager;

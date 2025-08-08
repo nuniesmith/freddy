@@ -1,42 +1,115 @@
-<div class="dashboard-header">
-    <h1>🏠 {{title}}</h1>
-    <p class="subtitle">{{subtitle}}</p>
-    
-    {{#if showSearch}}
-    <div class="search-container">
-        <input type="text" 
-               id="search-input" 
-               class="search-input" 
-               placeholder="{{searchPlaceholder}}" 
-               aria-label="Search services">
-        <div class="search-suggestions" id="search-suggestions" style="display: none;">
-            <!-- Dynamic search suggestions will be inserted here -->
+<!-- components/header.html -->
+<header class="dashboard-header" role="banner">
+    <div class="header-content">
+        <div class="header-brand">
+            <h1 class="dashboard-title">
+                <span class="brand-icon" aria-hidden="true">🏠</span>
+                <span class="brand-text">{{title}}</span>
+            </h1>
+            <p class="dashboard-subtitle">{{subtitle}}</p>
+        </div>
+        
+        <div class="header-controls">
+            <div class="search-container">
+                <div class="search-wrapper">
+                    <label for="search" class="search-label sr-only">Search services</label>
+                    <input type="text" 
+                           id="search" 
+                           class="search-input" 
+                           placeholder="{{searchPlaceholder}}" 
+                           aria-label="Search services"
+                           autocomplete="off"
+                           spellcheck="false"
+                           role="searchbox">
+                    
+                    <button class="search-clear" 
+                            id="search-clear" 
+                            style="display: none;"
+                            aria-label="Clear search"
+                            title="Clear search">
+                        <span aria-hidden="true">✕</span>
+                    </button>
+                </div>
+                
+                <div class="search-suggestions" 
+                     id="search-suggestions" 
+                     style="display: none;"
+                     role="listbox"
+                     aria-label="Search suggestions">
+                    <!-- Dynamic search suggestions -->
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <button id="theme-toggle" 
+                        class="action-button theme-toggle" 
+                        title="Toggle theme" 
+                        aria-label="Toggle dark mode">
+                    <span class="theme-icon" aria-hidden="true">🌙</span>
+                </button>
+                
+                <button id="refresh-services" 
+                        class="action-button refresh-button" 
+                        title="Refresh services" 
+                        aria-label="Refresh all services">
+                    <span class="refresh-icon" aria-hidden="true">🔄</span>
+                </button>
+                
+                <button id="settings-toggle" 
+                        class="action-button settings-button" 
+                        title="Dashboard settings" 
+                        aria-label="Open settings">
+                    <span class="settings-icon" aria-hidden="true">⚙️</span>
+                </button>
+            </div>
         </div>
     </div>
-    {{/if}}
     
-    {{#if showStats}}
-    <div class="dashboard-stats">
-        <div class="stat-item">
-            <span class="stat-number">{{serviceCount}}</span>
-            <span class="stat-label">Services</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-number">{{categoryCount}}</span>
-            <span class="stat-label">Categories</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-number status-indicator"></span>
-            <span class="stat-label">Online</span>
+    <div class="dashboard-stats stats-visible">
+        <div class="stats-container">
+            <div class="stat-item">
+                <span class="stat-number" id="total-services">{{serviceCount}}</span>
+                <span class="stat-label">Services</span>
+            </div>
+            
+            <div class="stat-item">
+                <span class="stat-number" id="total-categories">{{categoryCount}}</span>
+                <span class="stat-label">Categories</span>
+            </div>
+            
+            <div class="stat-item">
+                <span class="stat-number status-online" id="services-online">0</span>
+                <span class="stat-label">Online</span>
+            </div>
+            
+            <div class="stat-item">
+                <span class="stat-number status-warning" id="services-warning">0</span>
+                <span class="stat-label">Warning</span>
+            </div>
+            
+            <div class="stat-item">
+                <span class="stat-number status-offline" id="services-offline">0</span>
+                <span class="stat-label">Offline</span>
+            </div>
         </div>
     </div>
-    {{/if}}
     
-    {{#if showThemeToggle}}
-    <div class="theme-controls">
-        <button id="theme-toggle" class="theme-toggle-btn" title="Toggle Dark Mode">
-            🌙
-        </button>
+    <div id="status-bar" class="status-bar" style="display: none;">
+        <div class="status-content">
+            <div class="status-item">
+                <span class="status-label">System Status:</span>
+                <span class="status-indicator" id="system-status">Operational</span>
+            </div>
+            
+            <div class="status-item">
+                <span class="status-label">Last Updated:</span>
+                <span id="last-updated" class="status-time">{{timestamp}}</span>
+            </div>
+            
+            <div class="status-item">
+                <span class="status-label">Response Time:</span>
+                <span id="avg-response-time" class="status-time">--ms</span>
+            </div>
+        </div>
     </div>
-    {{/if}}
-</div>
+</header>
