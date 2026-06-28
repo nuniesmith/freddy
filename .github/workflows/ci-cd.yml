@@ -63,17 +63,6 @@ env:
     PROJECT_PATH: freddy
     DOMAIN: 7gram.xyz
 
-    # Freddy DNS records (services hosted on freddy)
-    FREDDY_DNS_RECORDS: >-
-        7gram.xyz
-        *.7gram.xyz
-        nc.7gram.xyz
-        photo.7gram.xyz
-        home.7gram.xyz
-        abs.7gram.xyz
-        auth.7gram.xyz
-        status.7gram.xyz
-
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
@@ -102,7 +91,12 @@ jobs:
             - name: 📥 Checkout code
               uses: actions/checkout@v4
 
-            - name: 🌐 Update Freddy DNS Records
+            # A single wildcard record (*.7gram.xyz) covers every service subdomain
+            # (freddy + sullivan), so we no longer maintain ~25 individual records.
+            # nginx routes by Host header and drops unknown hosts with 444.
+            # All records are DNS-only (proxied: false) because they point at a
+            # Tailscale CGNAT IP that Cloudflare's edge cannot reach.
+            - name: 🌐 Update Freddy DNS Records (apex + wildcard)
               id: dns-freddy
               uses: nuniesmith/actions/.github/actions/cloudflare-dns-update@main
               with:
@@ -115,46 +109,7 @@ jobs:
                   proxied: "false"
                   additional-records: |
                       [
-                        {"name": "nc.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "photo.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "home.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "abs.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "auth.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "status.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "freddy.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"}
-                      ]
-
-            - name: 🌐 Update Sullivan DNS Records (proxied via Freddy nginx)
-              id: dns-sullivan
-              uses: nuniesmith/actions/.github/actions/cloudflare-dns-update@main
-              with:
-                  api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  zone-id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-                  record-name: sullivan.7gram.xyz
-                  record-content: ${{ secrets.FREDDY_TAILSCALE_IP }}
-                  record-type: A
-                  ttl: "1"
-                  proxied: "false"
-                  additional-records: |
-                      [
-                        {"name": "jellyfin.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "emby.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "plex.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "sonarr.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "radarr.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "lidarr.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "prowlarr.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "bazarr.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "seerr.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "tdarr.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "qbt.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "calibre.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "yt.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "filebot.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "grocy.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "mealie.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "wiki.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"},
-                        {"name": "duplicati.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"}
+                        {"name": "*.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"}
                       ]
 
             - name: 📋 DNS Update Summary
@@ -163,8 +118,8 @@ jobs:
                   echo "" >> $GITHUB_STEP_SUMMARY
                   echo "**Target IP (Freddy Tailscale):** \`${{ secrets.FREDDY_TAILSCALE_IP }}\`" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "All DNS records for 7gram.xyz have been updated to point to the Freddy server." >> $GITHUB_STEP_SUMMARY
-                  echo "Freddy's nginx will reverse proxy Sullivan services over Tailscale." >> $GITHUB_STEP_SUMMARY
+                  echo "Apex (\`7gram.xyz\`) and wildcard (\`*.7gram.xyz\`) A records now point to the Freddy server." >> $GITHUB_STEP_SUMMARY
+                  echo "Every service subdomain resolves via the wildcard; Freddy's nginx routes by Host header and proxies Sullivan services over Tailscale." >> $GITHUB_STEP_SUMMARY
 
     # ==========================================================================
     # DEPLOYMENT (includes SSL generation)

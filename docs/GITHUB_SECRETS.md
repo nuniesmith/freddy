@@ -8,8 +8,8 @@ This document lists all the GitHub secrets required for the CI/CD workflow to de
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
-| `FREDDY_TAILSCALE_IP` | Tailscale IP address of the Freddy server | `100.87.125.19` |
-| `SULLIVAN_TAILSCALE_IP` | Tailscale IP address of the Sullivan server (for proxying) | `100.87.125.20` |
+| `FREDDY_TAILSCALE_IP` | Tailscale IP address of the Freddy server | `100.106.65.55` |
+| `SULLIVAN_TAILSCALE_IP` | Tailscale IP address of the Sullivan server (for proxying) | `100.87.125.19` |
 | `SSH_PORT` | SSH port for Freddy server | `22` |
 | `SSH_USER` | SSH username for deployment | `actions` |
 | `SSH_KEY` | Private SSH key for authentication | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
@@ -139,8 +139,8 @@ If the workflow fails to connect via SSH:
 # setup-secrets.sh - Helper script to set all required secrets
 
 # Infrastructure
-gh secret set FREDDY_TAILSCALE_IP --body "100.87.125.19"
-gh secret set SULLIVAN_TAILSCALE_IP --body "100.87.125.20"
+gh secret set FREDDY_TAILSCALE_IP --body "100.106.65.55"
+gh secret set SULLIVAN_TAILSCALE_IP --body "100.87.125.19"
 gh secret set SSH_PORT --body "22"
 gh secret set SSH_USER --body "actions"
 gh secret set SSH_KEY < ~/.ssh/freddy_deploy_key
