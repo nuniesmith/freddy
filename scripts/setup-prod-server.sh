@@ -645,6 +645,14 @@ setup_directories() {
     # Set ownership (if /mnt/1tb exists)
     if [ -d /mnt/1tb ]; then
         chown -R actions:actions /mnt/1tb 2>/dev/null || true
+
+        # The Nextcloud container writes html/config/data as UID 33
+        # (www-data) — re-apply that ownership after the blanket chown
+        # above so a rerun of this script (e.g. re-provisioning an
+        # existing server) doesn't revert it and break the container's
+        # before-starting config hook (permission denied on cp).
+        # Mirrors the chown done on every deploy in ci-cd.yml.
+        chown -R 33:33 /mnt/1tb/nextcloud/html /mnt/1tb/nextcloud/config /mnt/1tb/nextcloud/data 2>/dev/null || true
     fi
 
     # Set permissions
