@@ -81,7 +81,7 @@ volumes:
         driver_opts:
             type: none
             o: bind
-            device: /mnt/1tb/audiobookshelf/audiobooks
+            device: /mnt/1tb/audiobooks
     audiobookshelf_config:
         driver: local
         driver_opts:
