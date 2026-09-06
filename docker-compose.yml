@@ -133,51 +133,12 @@ volumes:
             o: bind
             device: /mnt/1tb/uptime-kuma
 
-    # SSL Certificates volume (shared between CI/CD and nginx)
-    # External volume - created by CI/CD, not managed by docker-compose
-    ssl-certs:
-        external: true
-
 # Single network for all services - simple and reliable DNS resolution
 networks:
     freddy:
         driver: bridge
 
 services:
-    # =============================================================================
-    # REVERSE PROXY
-    # =============================================================================
-
-    # nginx reverse proxy
-    nginx:
-        build:
-            context: .
-            dockerfile: ./docker/nginx/Dockerfile
-        container_name: nginx
-        environment:
-            TZ: ${TZ:-America/Toronto}
-        volumes:
-            - ssl-certs:/etc/letsencrypt-volume:ro
-        ports:
-            - "80:80"
-            - "443:443"
-        restart: unless-stopped
-        logging: *default-logging
-        networks:
-            - freddy
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
-            - "sullivan.7gram.xyz:${SULLIVAN_TAILSCALE_IP:-100.87.125.19}"
-            - "sullivan:${SULLIVAN_TAILSCALE_IP:-100.87.125.19}"
-        healthcheck:
-            test: ["CMD-SHELL", "curl -kf https://127.0.0.1/health || exit 1"]
-            <<: *healthcheck-defaults
-            start_period: 15s
-        deploy:
-            resources:
-                limits:
-                    memory: 256M
-
     # =============================================================================
     # AUTHENTICATION - Authentik SSO
     # =============================================================================
