@@ -7,820 +7,373 @@
 # Services: nginx, photoprism, nextcloud, homeassistant, audiobookshelf, authentik, uptime-kuma
 #
 # Features:
-#   - Cloudflare DNS management (update A records to Tailscale IPs)
-#   - SSL certificate generation via Certbot with Cloudflare DNS challenge
 #   - Deployment via Tailscale + SSH
+#   - Git pull / clone + Docker Compose rebuild & restart
 # ============================================================================
-
 name: 🏠 Freddy Deploy
 
 on:
-    push:
-        branches:
-            - main
-        paths-ignore:
-            - "**.md"
-            - "docs/**"
-            - ".gitignore"
-    pull_request:
-        branches: [main]
-    workflow_dispatch:
-        inputs:
-            skip_deploy:
-                description: "Skip deployment (test workflow only)"
-                required: false
-                type: boolean
-                default: false
-            update_dns:
-                description: "Update Cloudflare DNS records"
-                required: false
-                type: boolean
-                default: true
-            force_ssl_regen:
-                description: "Force SSL certificate regeneration (fixes corrupted certs)"
-                required: false
-                type: boolean
-                default: false
-            use_staging_certs:
-                description: "Use Let's Encrypt staging server (for testing, avoids rate limits)"
-                required: false
-                type: boolean
-                default: false
-            reset_nextcloud_db:
-                description: "Full Nextcloud reset: clears database, config, and app files (preserves user data)"
-                required: false
-                type: boolean
-                default: false
-    schedule:
-        # Run SSL renewal check weekly on Sundays at 3am UTC
-        - cron: "0 3 * * 0"
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".gitignore"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_deploy:
+        description: "Skip deployment (test workflow only)"
+        required: false
+        type: boolean
+        default: false
+      reset_nextcloud_db:
+        description: "Full Nextcloud reset: clears database, config, and app files (preserves user data)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-    contents: read
+  contents: read
 
 env:
-    SERVER_NAME: freddy
-    PROJECT_PATH: freddy
-    DOMAIN: 7gram.xyz
+  SERVER_NAME: freddy
+  PROJECT_PATH: freddy
+  DOMAIN: 7gram.xyz
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
-    run:
-        shell: bash
+  run:
+    shell: bash
 
 jobs:
-    # ==========================================================================
-    # CLOUDFLARE DNS UPDATE
-    # ==========================================================================
-    dns-update:
-        name: 🌐 Update Cloudflare DNS
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        if: |
-            github.event_name == 'workflow_dispatch' && inputs.update_dns ||
-            github.event_name == 'push' ||
-            github.event_name == 'schedule'
-
-        outputs:
-            dns-updated: ${{ steps.dns-freddy.outputs.updated }}
-
-        steps:
-            - name: 📥 Checkout code
-              uses: actions/checkout@v4
-
-            # A single wildcard record (*.7gram.xyz) covers every service subdomain
-            # (freddy + sullivan), so we no longer maintain ~25 individual records.
-            # nginx routes by Host header and drops unknown hosts with 444.
-            # All records are DNS-only (proxied: false) because they point at a
-            # Tailscale CGNAT IP that Cloudflare's edge cannot reach.
-            - name: 🌐 Update Freddy DNS Records (apex + wildcard)
-              id: dns-freddy
-              uses: nuniesmith/actions/.github/actions/cloudflare-dns-update@main
-              with:
-                  api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  zone-id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-                  record-name: ${{ env.DOMAIN }}
-                  record-content: ${{ secrets.FREDDY_TAILSCALE_IP }}
-                  record-type: A
-                  ttl: "1"
-                  proxied: "false"
-                  additional-records: |
-                      [
-                        {"name": "*.7gram.xyz", "content": "${{ secrets.FREDDY_TAILSCALE_IP }}"}
-                      ]
-
-            - name: 📋 DNS Update Summary
-              run: |
-                  echo "## 🌐 DNS Update Summary" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "**Target IP (Freddy Tailscale):** \`${{ secrets.FREDDY_TAILSCALE_IP }}\`" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "Apex (\`7gram.xyz\`) and wildcard (\`*.7gram.xyz\`) A records now point to the Freddy server." >> $GITHUB_STEP_SUMMARY
-                  echo "Every service subdomain resolves via the wildcard; Freddy's nginx routes by Host header and proxies Sullivan services over Tailscale." >> $GITHUB_STEP_SUMMARY
-
-    # ==========================================================================
-    # DEPLOYMENT (includes SSL generation)
-    # ==========================================================================
-    deploy:
-        name: 🚀 Deploy to Freddy
-        runs-on: ubuntu-latest
-        timeout-minutes: 30
-        needs: dns-update
-        outputs:
-            cert_exists: ${{ steps.check-certs.outputs.cert_exists }}
-            needs_renewal: ${{ steps.check-certs.outputs.needs_renewal }}
-            expiry_date: ${{ steps.check-certs.outputs.expiry_date }}
-            days_until_expiry: ${{ steps.check-certs.outputs.days_until_expiry }}
-        if: |
-            always() &&
-            (needs.dns-update.result == 'success' || needs.dns-update.result == 'skipped') &&
-            (
-              github.event_name == 'push' ||
-              github.event_name == 'schedule' ||
-              github.event_name == 'workflow_dispatch' && inputs.skip_deploy != true
-            )
-
-        steps:
-            - name: 📥 Checkout code
-              uses: actions/checkout@v4
-
-            # ======================================================================
-            # TAILSCALE CONNECTION
-            # ======================================================================
-            - name: 🔌 Connect to Tailscale
-              id: tailscale
-              uses: nuniesmith/actions/.github/actions/tailscale-connect@main
-              with:
-                  oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-                  oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-                  target-ip: ${{ secrets.FREDDY_TAILSCALE_IP }}
-                  target-ssh-port: ${{ secrets.SSH_PORT || '22' }}
-
-            # ======================================================================
-            # SSL CERTIFICATE GENERATION
-            # ======================================================================
-            - name: 🧹 Clean corrupted SSL certificates
-              if: inputs.force_ssl_regen == true
-              run: |
-                  echo "🧹 Forcing comprehensive SSL certificate cleanup..."
-                  echo "This will remove ALL existing certificates from ssl-certs Docker volume"
-
-                  # Setup SSH key
-                  mkdir -p ~/.ssh
-                  echo "$SSH_KEY" > ~/.ssh/id_rsa
-                  chmod 600 ~/.ssh/id_rsa
-
-                  ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p ${{ secrets.SSH_PORT || '22' }} \
-                    ${{ secrets.SSH_USER || 'actions' }}@${{ secrets.FREDDY_TAILSCALE_IP }} << 'ENDSSH'
-
-                  set -e
-                  echo "================================================"
-                  echo "  SSL CERTIFICATE CLEANUP (Docker Volume)"
-                  echo "================================================"
-
-                  # Stop nginx to release any file locks
-                  echo "→ Stopping nginx container..."
-                  docker stop nginx 2>/dev/null || true
-                  docker rm nginx 2>/dev/null || true
-
-                  # Remove and recreate ssl-certs volume
-                  echo "→ Removing ssl-certs Docker volume..."
-                  docker volume rm ssl-certs 2>/dev/null || true
-                  docker volume rm freddy_ssl-certs 2>/dev/null || true
-
-                  echo "→ Creating fresh ssl-certs volume..."
-                  docker volume create ssl-certs
-
-                  echo ""
-                  echo "✅ Docker volume cleanup finished"
-                  echo "   Ready for fresh SSL certificate generation"
-                  echo "================================================"
-                  ENDSSH
-
-                  # Cleanup SSH key
-                  rm -f ~/.ssh/id_rsa
-              env:
-                  SSH_KEY: ${{ secrets.SSH_KEY }}
-
-            - name: 🔍 Check existing SSL certificates
-              id: check-certs
-              continue-on-error: true
-              run: |
-                  echo "🔍 Checking existing SSL certificates..."
-
-                  # Setup SSH key
-                  mkdir -p ~/.ssh
-                  echo "$SSH_KEY" > ~/.ssh/id_rsa
-                  chmod 600 ~/.ssh/id_rsa
-
-                  # Create temporary script for remote execution
-                  cat > /tmp/check_certs.sh << 'SCRIPTEOF'
-                  #!/bin/bash
-                  # Check if ssl-certs volume exists and has certificates
-                  if docker volume inspect ssl-certs >/dev/null 2>&1; then
-                    if docker run --rm -v ssl-certs:/certs:ro busybox:latest test -f /certs/live/7gram.xyz/fullchain.pem 2>/dev/null; then
-                      # Get certificate expiry date
-                      EXPIRY_DATE=$(docker run --rm -v ssl-certs:/certs:ro alpine/openssl x509 -in /certs/live/7gram.xyz/fullchain.pem -noout -enddate 2>/dev/null | cut -d= -f2 || echo "")
-
-                      if [ -n "$EXPIRY_DATE" ]; then
-                        EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || echo "0")
-                        CURRENT_EPOCH=$(date +%s)
-                        DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $CURRENT_EPOCH) / 86400 ))
-
-                        # Get issuer to determine cert type
-                        ISSUER=$(docker run --rm -v ssl-certs:/certs:ro alpine/openssl x509 -in /certs/live/7gram.xyz/fullchain.pem -noout -issuer 2>/dev/null || echo "")
-
-                        echo "CERT_EXISTS=true"
-                        echo "EXPIRY_DATE=$EXPIRY_DATE"
-                        echo "DAYS_UNTIL_EXPIRY=$DAYS_UNTIL_EXPIRY"
-                        echo "ISSUER=$ISSUER"
-
-                        # Renew if less than 30 days remaining
-                        if [ "$DAYS_UNTIL_EXPIRY" -lt 30 ]; then
-                          echo "NEEDS_RENEWAL=true"
-                        else
-                          echo "NEEDS_RENEWAL=false"
-                        fi
-                        exit 0
-                      fi
-                    fi
-                  fi
-
-                  echo "CERT_EXISTS=false"
-                  echo "NEEDS_RENEWAL=true"
-                  exit 0
-                  SCRIPTEOF
-
-                  # Run script on remote server
-                  CERT_CHECK=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p ${{ secrets.SSH_PORT || '22' }} \
-                    ${{ secrets.SSH_USER || 'actions' }}@${{ secrets.FREDDY_TAILSCALE_IP }} \
-                    'bash -s' < /tmp/check_certs.sh 2>/dev/null || echo "CERT_EXISTS=false
-                  NEEDS_RENEWAL=true")
-
-                  # Clean up temp file
-                  rm -f /tmp/check_certs.sh
-
-                  # Parse the output (use defaults if parsing fails)
-                  CERT_EXISTS=$(echo "$CERT_CHECK" | grep "CERT_EXISTS=" | cut -d= -f2 | head -1 || echo "false")
-                  EXPIRY_DATE=$(echo "$CERT_CHECK" | grep "EXPIRY_DATE=" | cut -d= -f2- | head -1 || echo "")
-                  DAYS_UNTIL_EXPIRY=$(echo "$CERT_CHECK" | grep "DAYS_UNTIL_EXPIRY=" | cut -d= -f2 | head -1 || echo "0")
-                  ISSUER=$(echo "$CERT_CHECK" | grep "ISSUER=" | cut -d= -f2- | head -1 || echo "")
-                  NEEDS_RENEWAL=$(echo "$CERT_CHECK" | grep "NEEDS_RENEWAL=" | cut -d= -f2 | head -1 || echo "true")
-
-                  # Clean up SSH key
-                  rm -f ~/.ssh/id_rsa
-
-                  # Set outputs (always set, even if empty)
-                  echo "cert_exists=${CERT_EXISTS:-false}" >> $GITHUB_OUTPUT
-                  echo "needs_renewal=${NEEDS_RENEWAL:-true}" >> $GITHUB_OUTPUT
-                  echo "expiry_date=${EXPIRY_DATE:-unknown}" >> $GITHUB_OUTPUT
-                  echo "days_until_expiry=${DAYS_UNTIL_EXPIRY:-0}" >> $GITHUB_OUTPUT
-
-                  # Display results
-                  if [ "$CERT_EXISTS" = "true" ]; then
-                    echo "✅ Existing certificates found"
-                    echo "📅 Expires: $EXPIRY_DATE"
-                    echo "⏰ Days until expiry: $DAYS_UNTIL_EXPIRY"
-                    echo "🔐 Issuer: $ISSUER"
-
-                    if [ "$NEEDS_RENEWAL" = "true" ]; then
-                      echo "⚠️  Certificates need renewal (< 30 days remaining)"
-                    else
-                      echo "✅ Certificates are still valid (> 30 days remaining)"
-                    fi
-                  else
-                    echo "⚠️  No existing certificates found - will generate new ones"
-                  fi
-              env:
-                  SSH_KEY: ${{ secrets.SSH_KEY }}
-
-            - name: 🔐 Generate SSL Certificates (Let's Encrypt + Cloudflare DNS)
-              id: certbot
-              if: steps.check-certs.outputs.needs_renewal == 'true' || inputs.force_ssl_regen == true
-              uses: nuniesmith/actions/.github/actions/ssl-certbot-cloudflare@main
-              with:
-                  domain: ${{ env.DOMAIN }}
-                  # Note: Don't include specific subdomains that are covered by wildcards
-                  # *.7gram.xyz covers nc, photo, home, abs, sullivan, etc.
-                  # *.sullivan.7gram.xyz covers any sullivan subdomains
-                  additional-domains: "*.7gram.xyz,*.sullivan.7gram.xyz"
-                  cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  email: ${{ secrets.SSL_EMAIL }}
-                  propagation-seconds: 60
-                  staging: ${{ inputs.use_staging_certs || false }}
-                  fallback-to-self-signed: true
-                  deploy-to-server: false
-
-            - name: 📦 Deploy certificates to Docker volume
-              id: deploy-certs
-              if: steps.certbot.outcome == 'success'
-              run: |
-                  echo "📦 Deploying SSL certificates to Freddy server..."
-
-                  # Setup SSH key
-                  mkdir -p ~/.ssh
-                  echo "$SSH_KEY" > ~/.ssh/id_rsa
-                  chmod 600 ~/.ssh/id_rsa
-
-                  # Transfer certificate tarball to server
-                  echo "📤 Transferring certificates..."
-                  scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -P ${{ secrets.SSH_PORT || '22' }} \
-                    /tmp/ssl-certs.tar.gz \
-                    ${{ secrets.SSH_USER || 'actions' }}@${{ secrets.FREDDY_TAILSCALE_IP }}:/tmp/
-
-                  # Create deployment script
-                  cat > /tmp/deploy_certs.sh << 'SCRIPTEOF'
-                  #!/bin/bash
-                  # Ensure ssl-certs volume exists
-                  docker volume inspect ssl-certs >/dev/null 2>&1 || docker volume create ssl-certs
-
-                  # Extract certificates into the volume
-                  docker run --rm -v ssl-certs:/certs -v /tmp:/tmp busybox sh -c "cd /certs && tar -xzf /tmp/ssl-certs.tar.gz && ls -la /certs/live/7gram.xyz/ && echo 'Certificates deployed successfully'"
-
-                  # Clean up the tarball on the server
-                  rm -f /tmp/ssl-certs.tar.gz || echo "Note: Could not remove /tmp/ssl-certs.tar.gz (may not exist)"
-
-                  echo "✅ Certificates deployed to ssl-certs Docker volume"
-                  SCRIPTEOF
-
-                  # Deploy to Docker volume on server
-                  echo "🔐 Extracting certificates to Docker volume..."
-                  ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p ${{ secrets.SSH_PORT || '22' }} \
-                    ${{ secrets.SSH_USER || 'actions' }}@${{ secrets.FREDDY_TAILSCALE_IP }} \
-                    'bash -s' < /tmp/deploy_certs.sh
-
-                  # Clean up SSH key and local files
-                  rm -f ~/.ssh/id_rsa
-                  rm -f /tmp/ssl-certs.tar.gz || true
-                  rm -f /tmp/deploy_certs.sh
-
-                  echo "✅ SSL certificate deployment complete"
-              env:
-                  SSH_KEY: ${{ secrets.SSH_KEY }}
-
-            - name: ✅ Verify SSL certificates in Docker volume
-              if: steps.certbot.outcome == 'success' || steps.check-certs.outputs.cert_exists == 'true'
-              run: |
-                  echo "🔍 Verifying SSL certificates in Docker volume..."
-                  echo "Note: Let's Encrypt uses ECDSA P-256 keys (241 bytes) - this is normal and secure"
-
-                  # Setup SSH key
-                  mkdir -p ~/.ssh
-                  echo "$SSH_KEY" > ~/.ssh/id_rsa
-                  chmod 600 ~/.ssh/id_rsa
-
-                  ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p ${{ secrets.SSH_PORT || '22' }} \
-                    ${{ secrets.SSH_USER || 'actions' }}@${{ secrets.FREDDY_TAILSCALE_IP }} << 'ENDSSH'
-
-                  echo "================================================"
-                  echo "  SSL CERTIFICATE VERIFICATION (Docker Volume)"
-                  echo "================================================"
-
-                  # Check if ssl-certs volume exists
-                  if docker volume inspect ssl-certs >/dev/null 2>&1; then
-                    echo "✓ ssl-certs volume exists"
-
-                    # Check if certificates exist in volume
-                    if docker run --rm -v ssl-certs:/certs:ro busybox:latest test -f /certs/live/7gram.xyz/fullchain.pem 2>/dev/null; then
-                      echo "✓ Let's Encrypt certificates found in volume"
-
-                      # List certificate files
-                      echo ""
-                      echo "Certificate files in ssl-certs volume:"
-                      docker run --rm -v ssl-certs:/certs:ro busybox:latest ls -lah /certs/live/7gram.xyz/
-
-                      # Verify certificate details
-                      echo ""
-                      echo "Certificate details:"
-                      docker run --rm -v ssl-certs:/certs:ro alpine/openssl x509 -in /certs/live/7gram.xyz/fullchain.pem -noout -issuer -dates -subject 2>/dev/null || true
-
-                      # Verify certificate and private key match (supports both RSA and ECDSA)
-                      echo ""
-                      echo "Verifying certificate/key pair..."
-                      CERT_PUBKEY=$(docker run --rm -v ssl-certs:/certs:ro alpine/openssl x509 -noout -pubkey -in /certs/live/7gram.xyz/fullchain.pem 2>/dev/null | sha256sum | cut -d' ' -f1)
-                      KEY_PUBKEY=$(docker run --rm -v ssl-certs:/certs:ro alpine/openssl pkey -pubout -in /certs/live/7gram.xyz/privkey.pem 2>/dev/null | sha256sum | cut -d' ' -f1)
-
-                      if [ -n "$CERT_PUBKEY" ] && [ "$CERT_PUBKEY" = "$KEY_PUBKEY" ]; then
-                        echo "✓ Certificate and private key match (public key verified)"
-
-                        # Detect key type
-                        KEY_TYPE=$(docker run --rm -v ssl-certs:/certs:ro alpine/openssl pkey -text -noout -in /certs/live/7gram.xyz/privkey.pem 2>/dev/null | head -1)
-                        echo "  Key type: $KEY_TYPE"
-                      else
-                        echo "⚠️ Could not verify certificate/key match"
-                        echo "  Certificate files exist and appear valid"
-                      fi
-                    else
-                      echo "⚠️ No Let's Encrypt certificates found in volume"
-                      echo "   Volume contents:"
-                      docker run --rm -v ssl-certs:/certs:ro busybox:latest ls -la /certs/ 2>/dev/null || echo "   Volume is empty"
-                    fi
-                  else
-                    echo "✗ ssl-certs volume does not exist"
-                  fi
-
-                  echo "================================================"
-                  ENDSSH
-
-                  # Cleanup SSH key
-                  rm -f ~/.ssh/id_rsa
-              env:
-                  SSH_KEY: ${{ secrets.SSH_KEY }}
-
-            # ======================================================================
-            # DEPLOY VIA SSH
-            # ======================================================================
-            - name: 🚀 Deploy via SSH
-              id: deploy
-              if: steps.tailscale.outputs.connected == 'true'
-              uses: nuniesmith/actions/.github/actions/ssh-deploy@main
-              with:
-                  host: ${{ secrets.FREDDY_TAILSCALE_IP }}
-                  port: ${{ secrets.SSH_PORT || '22' }}
-                  username: ${{ secrets.SSH_USER || 'actions' }}
-                  ssh-key: ${{ secrets.SSH_KEY }}
-                  project-path: ${{ env.PROJECT_PATH }}
-                  git-pull: false
-                  git-branch: ${{ github.ref_name }}
-                  docker-prune: false
-                  pre-deploy-command: |
-                      echo "🏠 Deploying to Freddy server..."
-
-                      # Create project directory if it doesn't exist
-                      echo "📁 Ensuring project directory exists..."
-                      mkdir -p $HOME/${{ env.PROJECT_PATH }}
-                      cd $HOME/${{ env.PROJECT_PATH }}
-
-                      # Handle git repository setup early (needed for run.sh)
-                      if [ -d .git ] && git status >/dev/null 2>&1; then
-                        echo "📥 Updating existing repository..."
-                        git fetch origin
-                        git checkout ${{ github.ref_name }}
-                        git pull origin ${{ github.ref_name }} || {
-                          echo "⚠️ Git pull failed, doing hard reset..."
-                          git reset --hard origin/${{ github.ref_name }}
-                        }
-                      else
-                        echo "📥 Cloning repository (first deployment)..."
-                        cd ~
-                        rm -rf $HOME/${{ env.PROJECT_PATH }}
-                        git clone https://github.com/${{ github.repository }}.git $HOME/${{ env.PROJECT_PATH }}
-                        cd $HOME/${{ env.PROJECT_PATH }}
-                        git checkout ${{ github.ref_name }}
-                      fi
-
-                      # Ensure run.sh is executable
-                      chmod +x ./run.sh 2>/dev/null || true
-
-                      echo "🔐 Setting up .env file..."
-
-                      # Try run.sh first (primary method)
-                      ENV_CREATED=false
-                      if [ -f ./run.sh ]; then
-                        echo "   ▶ Running: bash ./run.sh setup-env"
-                        bash ./run.sh setup-env 2>&1 || true
-                        if [ -f .env ] && [ -s .env ]; then
-                          echo "   ✅ .env exists after run.sh ($(wc -l < .env) lines)"
-                          ENV_CREATED=true
-                        fi
-                      fi
-
-                      # Fallback: create .env directly
-                      if [ "$ENV_CREATED" != "true" ]; then
-                        echo "   🔄 Fallback: Creating .env directly..."
-                        GEN_PASS() { openssl rand -base64 24 2>/dev/null | tr -d '/+=' | head -c 16 || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1; }
-                        GEN_SECRET() { openssl rand -hex 16 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1; }
-
-                        cat > .env << 'ENVEOF'
-                      # Freddy Home Server - Auto-generated by CI/CD fallback
-                      ENVEOF
-                        # Generate with variable expansion
-                        cat >> .env << ENVEOF
-                      TZ=${{ secrets.TZ || 'America/Toronto' }}
-                      PUID=${{ secrets.PUID || '1000' }}
-                      PGID=${{ secrets.PGID || '1000' }}
-                      PHOTOPRISM_ADMIN_PASSWORD=$(GEN_PASS)
-                      PHOTOPRISM_DB_NAME=photoprism
-                      PHOTOPRISM_DB_USER=photoprism
-                      PHOTOPRISM_DB_PASSWORD=$(GEN_PASS)
-                      NEXTCLOUD_DB_NAME=nextcloud
-                      NEXTCLOUD_DB_USER=nextcloud
-                      NEXTCLOUD_DB_PASSWORD=$(GEN_PASS)
-                      NEXTCLOUD_ADMIN_USER=admin
-                      NEXTCLOUD_ADMIN_PASSWORD=$(GEN_PASS)
-                      AUTHENTIK_SECRET_KEY=$(GEN_SECRET)
-                      AUTHENTIK_POSTGRES_USER=authentik
-                      AUTHENTIK_POSTGRES_PASSWORD=$(GEN_PASS)
-                      SULLIVAN_TAILSCALE_IP=${{ secrets.SULLIVAN_TAILSCALE_IP || '100.87.125.19' }}
-                      MEDIA_PATH_AUDIOBOOKS=${{ secrets.MEDIA_PATH_AUDIOBOOKS || '/media/audiobooks' }}
-                      AUTHENTIK_SECRET_KEY=$(GEN_SECRET)$(GEN_SECRET)
-                      AUTHENTIK_POSTGRES_USER=authentik
-                      AUTHENTIK_POSTGRES_PASSWORD=$(GEN_PASS)
-                      ENVEOF
-                        sed -i 's/^                      //' .env
-                        echo "   ✅ Fallback .env created ($(wc -l < .env) lines)"
-                      fi
-
-                      # Verify critical keys
-                      MISSING_KEYS=0
-                      MISSING_NAMES=""
-                      for key in TZ PHOTOPRISM_ADMIN_PASSWORD NEXTCLOUD_ADMIN_PASSWORD AUTHENTIK_SECRET_KEY AUTHENTIK_POSTGRES_PASSWORD; do
-                        if ! grep -q "^${key}=" .env 2>/dev/null; then
-                          MISSING_KEYS=$((MISSING_KEYS + 1))
-                          MISSING_NAMES="$MISSING_NAMES $key"
-                        fi
-                      done
-                      if [ "$MISSING_KEYS" -gt 2 ]; then
-                        echo "   ❌ Too many critical keys missing ($MISSING_KEYS):$MISSING_NAMES"
-                        exit 1
-                      fi
-                      echo "   ✅ .env verification passed ($(grep -c '^[A-Z_]' .env 2>/dev/null || echo '?') keys)"
-
-                      # Inject secrets from GitHub Actions (if provided)
-                      echo "🔐 Injecting secrets from GitHub Actions..."
-                      if [ -n "${{ secrets.PHOTOPRISM_ADMIN_PASSWORD }}" ]; then
-                        sed -i "s/^PHOTOPRISM_ADMIN_PASSWORD=.*/PHOTOPRISM_ADMIN_PASSWORD=${{ secrets.PHOTOPRISM_ADMIN_PASSWORD }}/" .env
-                      fi
-                      if [ -n "${{ secrets.PHOTOPRISM_DB_PASSWORD }}" ]; then
-                        sed -i "s/^PHOTOPRISM_DB_PASSWORD=.*/PHOTOPRISM_DB_PASSWORD=${{ secrets.PHOTOPRISM_DB_PASSWORD }}/" .env
-                      fi
-                      if [ -n "${{ secrets.NEXTCLOUD_DB_PASSWORD }}" ]; then
-                        sed -i "s/^NEXTCLOUD_DB_PASSWORD=.*/NEXTCLOUD_DB_PASSWORD=${{ secrets.NEXTCLOUD_DB_PASSWORD }}/" .env
-                      fi
-                      if [ -n "${{ secrets.NEXTCLOUD_ADMIN_USER }}" ]; then
-                        sed -i "s/^NEXTCLOUD_ADMIN_USER=.*/NEXTCLOUD_ADMIN_USER=${{ secrets.NEXTCLOUD_ADMIN_USER }}/" .env
-                      fi
-                      if [ -n "${{ secrets.NEXTCLOUD_ADMIN_PASSWORD }}" ]; then
-                        sed -i "s/^NEXTCLOUD_ADMIN_PASSWORD=.*/NEXTCLOUD_ADMIN_PASSWORD=${{ secrets.NEXTCLOUD_ADMIN_PASSWORD }}/" .env
-                      fi
-                      if [ -n "${{ secrets.AUTHENTIK_SECRET_KEY }}" ]; then
-                        sed -i "s/^AUTHENTIK_SECRET_KEY=.*/AUTHENTIK_SECRET_KEY=${{ secrets.AUTHENTIK_SECRET_KEY }}/" .env
-                      fi
-                      if [ -n "${{ secrets.AUTHENTIK_POSTGRES_PASSWORD }}" ]; then
-                        sed -i "s/^AUTHENTIK_POSTGRES_PASSWORD=.*/AUTHENTIK_POSTGRES_PASSWORD=${{ secrets.AUTHENTIK_POSTGRES_PASSWORD }}/" .env
-                      fi
-                      echo "   ✅ Secrets injected"
-
-                      chmod 600 .env
-                      echo ""
-
-                      # Ensure all bind-mount directories for Docker volumes exist
-                      # Docker will NOT auto-create these for local driver bind mounts
-                      # Uses a busybox container to create dirs as root (no sudo needed)
-                      echo "📁 Ensuring volume mount directories exist..."
-                      docker run --rm -v /mnt/1tb:/mnt busybox sh -c "\
-                        mkdir -p \
-                          /mnt/photos \
-                          /mnt/photoprism/storage \
-                          /mnt/photoprism/postgres \
-                          /mnt/nextcloud/html \
-                          /mnt/nextcloud/config \
-                          /mnt/nextcloud/data \
-                          /mnt/nextcloud/postgres \
-                          /mnt/homeassistant \
-                          /mnt/audiobookshelf/audiobooks \
-                          /mnt/audiobookshelf/config \
-                          /mnt/audiobookshelf/metadata \
-                          /mnt/authentik/postgres \
-                          /mnt/authentik/redis \
-                          /mnt/authentik/media \
-                          /mnt/authentik/templates \
-                          /mnt/uptime-kuma \
-                        && chown -R 33:33 /mnt/nextcloud/html /mnt/nextcloud/config /mnt/nextcloud/data \
-                        && echo '  ✅ Volume directories ready'"
-
-                      # Full Nextcloud reset if requested
-                      # Clears postgres, config, and html so the entrypoint does a clean install.
-                      # User data in /mnt/1tb/nextcloud/data is NOT touched.
-                      if [ "${{ inputs.reset_nextcloud_db }}" = "true" ]; then
-                        echo "🔄 Performing full Nextcloud reset..."
-                        echo "   ⚠️  This will DELETE database, config, and app files!"
-                        echo "   ℹ️  User data in /mnt/1tb/nextcloud/data is preserved."
-                        docker stop nextcloud nextcloud-cron nextcloud-postgres 2>/dev/null || true
-                        docker rm nextcloud nextcloud-cron nextcloud-postgres 2>/dev/null || true
-                        docker run --rm -v /mnt/1tb:/mnt busybox sh -c "\
-                          echo '  → Removing PostgreSQL data...' \
-                          && rm -rf /mnt/nextcloud/postgres/* \
-                          && echo '  → Removing stale config (config.php)...' \
-                          && rm -rf /mnt/nextcloud/config/* \
-                          && echo '  → Removing app files (will be re-extracted from image)...' \
-                          && rm -rf /mnt/nextcloud/html/* \
-                          && echo '  → Re-creating directories with correct ownership...' \
-                          && mkdir -p /mnt/nextcloud/html /mnt/nextcloud/config /mnt/nextcloud/data /mnt/nextcloud/postgres \
-                          && chown -R 33:33 /mnt/nextcloud/html /mnt/nextcloud/config /mnt/nextcloud/data \
-                          && echo '  ✅ Nextcloud full reset complete (will reinitialize on next start)'"
-                      fi
-
-                      # Stop existing services to release file locks
-                      echo "🛑 Stopping existing services..."
-                      if [ -d "$HOME/${{ env.PROJECT_PATH }}" ]; then
-                        cd $HOME/${{ env.PROJECT_PATH }}
-                        ./run.sh stop 2>/dev/null || docker compose down 2>/dev/null || true
-                        cd ~
-                      fi
-
-                      # Note: SSL certificate cleanup is handled by the
-                      # force_ssl_regen workflow input. We don't remove certificates
-                      # here to preserve fresh certs from the SSL generation step.
-
-                      # Verify SSL certificates are ready in Docker volume
-                      echo "🔍 Checking for SSL certificates in Docker volume..."
-
-                      # Check if ssl-certs volume exists and has certificates
-                      if docker volume inspect ssl-certs >/dev/null 2>&1; then
-                        if docker run --rm -v ssl-certs:/certs:ro busybox:latest test -f /certs/live/${{ env.DOMAIN }}/fullchain.pem 2>/dev/null; then
-                          echo "✅ Let's Encrypt certificates found in ssl-certs volume"
-                          docker run --rm -v ssl-certs:/certs:ro busybox:latest ls -lah /certs/live/${{ env.DOMAIN }}/
-
-                          # Verify certificate details
-                          echo "🔐 Certificate details:"
-                          docker run --rm -v ssl-certs:/certs:ro alpine/openssl x509 -in /certs/live/${{ env.DOMAIN }}/fullchain.pem -noout -issuer -dates 2>/dev/null || true
-
-                          # Verify certificate and key match
-                          CERT_PK=$(docker run --rm -v ssl-certs:/certs:ro alpine/openssl x509 -noout -pubkey -in /certs/live/${{ env.DOMAIN }}/fullchain.pem 2>/dev/null | sha256sum | cut -d' ' -f1)
-                          KEY_PK=$(docker run --rm -v ssl-certs:/certs:ro alpine/openssl pkey -pubout -in /certs/live/${{ env.DOMAIN }}/privkey.pem 2>/dev/null | sha256sum | cut -d' ' -f1)
-
-                          if [ -n "$CERT_PK" ] && [ "$CERT_PK" = "$KEY_PK" ]; then
-                            echo "✅ Certificate and private key verified (match confirmed)"
-                          else
-                            echo "✅ Certificates present (will be validated by nginx on startup)"
-                          fi
-
-                          echo "✅ Nginx will use Let's Encrypt production certificates"
-                        else
-                          echo "⚠️  No Let's Encrypt certificates found in volume"
-                          echo "   Nginx will start using self-signed fallback certificates"
-                        fi
-                      else
-                        echo "⚠️  ssl-certs volume does not exist yet"
-                        echo "   Volume will be created during deployment"
-                        echo "   Nginx will start using self-signed fallback certificates"
-                      fi
-                      echo ""
-
-                      # Load environment variables
-                      if [ -f .env ]; then
-                        set -a && source .env && set +a
-                        echo "✓ Environment loaded"
-                      fi
-
-                  deploy-command: |
-                      # Action already cd's to PROJECT_PATH; use absolute path as safeguard
-                      cd $HOME/${{ env.PROJECT_PATH }}
-
-                      # Stop and remove existing containers + networks
-                      # (run.sh stop only stops containers without removing them,
-                      #  causing name conflicts on docker compose up)
-                      echo "🐳 Stopping existing services..."
-                      docker compose down --remove-orphans 2>/dev/null || true
-
-                      # Remove stale audiobookshelf volumes (created with bad paths before fix)
-                      echo "🧹 Removing stale audiobookshelf volumes (if any)..."
-                      docker volume rm freddy_audiobookshelf_data freddy_audiobookshelf_config freddy_audiobookshelf_metadata 2>/dev/null || true
-
-                      # Ensure ssl-certs external volume exists
-                      echo "🔐 Ensuring ssl-certs external volume exists..."
-                      if ! docker volume inspect ssl-certs >/dev/null 2>&1; then
-                        echo "  → Creating ssl-certs volume..."
-                        docker volume create ssl-certs
-                      else
-                        echo "  ✓ ssl-certs volume already exists"
-                      fi
-
-                      # Build nginx image (uses cache — only rebuilds if Dockerfile/config changed)
-                      # SSL certs are mounted via the ssl-certs Docker volume, not baked in
-                      echo "🔨 Building nginx image..."
-                      docker compose build nginx
-
-                      # Pull latest images and start all services in one pass
-                      echo "🚀 Pulling images & starting all services..."
-                      docker compose up -d --pull always --force-recreate --remove-orphans
-
-                      echo "✅ Deployment complete"
-
-                  post-deploy-command: |
-                      cd $HOME/${{ env.PROJECT_PATH }}
-
-                      echo ""
-                      echo "📊 Service Status:"
-                      docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker ps --format "table {{.Names}}\t{{.Status}}"
-
-                      echo ""
-                      echo "✅ Deployment complete!"
-
-            # ======================================================================
-            # HEALTH CHECKS
-            # ======================================================================
-            - name: 🏥 Run Health Checks
-              id: health-checks
-              if: always() && steps.deploy.outcome == 'success'
-              uses: nuniesmith/actions/.github/actions/health-check@main
-              with:
-                  # Note: health-check action expects SPACE-separated container names
-                  containers: nginx photoprism nextcloud homeassistant audiobookshelf authentik-server uptime-kuma
-                  ssh-host: ${{ secrets.FREDDY_TAILSCALE_IP }}
-                  ssh-port: ${{ secrets.SSH_PORT || '22' }}
-                  ssh-user: ${{ secrets.SSH_USER || 'actions' }}
-                  ssh-key: ${{ secrets.SSH_KEY }}
-                  initial-delay: 30
-                  retry-count: 3
-                  retry-delay: 10
-                  fail-on-unhealthy: false
-
-            # ======================================================================
-            # DISCORD NOTIFICATION (Optional)
-            # ======================================================================
-            - name: 📣 Notify deployment
-              if: always()
-              uses: nuniesmith/actions/.github/actions/discord-notify@main
-              continue-on-error: true
-              with:
-                  webhook-url: ${{ secrets.DISCORD_WEBHOOK_ACTIONS }}
-                  title: "🏠 Freddy Deployment"
-                  description: "Personal services server deployment"
-                  status: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
-                  include-repo-info: true
-                  fields: |
-                      [
-                        {"name": "Server", "value": "Freddy", "inline": true},
-                        {"name": "Branch", "value": "${{ github.ref_name }}", "inline": true},
-                        {"name": "Health", "value": "${{ steps.health-checks.outputs.healthy == 'true' && '✅ Healthy' || '⚠️ Check Required' }}", "inline": true}
-                      ]
-
-    # ==========================================================================
-    # PIPELINE SUMMARY
-    # ==========================================================================
-    summary:
-        name: 📊 Summary
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        needs: [dns-update, deploy]
+  # ==========================================================================
+  # DEPLOYMENT
+  # ==========================================================================
+  deploy:
+    name: 🚀 Deploy to Freddy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' && inputs.skip_deploy != true
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # ======================================================================
+      # TAILSCALE CONNECTION
+      # ======================================================================
+      - name: 🔌 Connect to Tailscale
+        id: tailscale
+        uses: nuniesmith/actions/.github/actions/tailscale-connect@main
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          target-ip: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          target-ssh-port: ${{ secrets.SSH_PORT || '22' }}
+
+      # ======================================================================
+      # DEPLOY VIA SSH
+      # ======================================================================
+      - name: 🚀 Deploy via SSH
+        id: deploy
+        if: steps.tailscale.outputs.connected == 'true'
+        uses: nuniesmith/actions/.github/actions/ssh-deploy@main
+        with:
+          host: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USER || 'actions' }}
+          ssh-key: ${{ secrets.SSH_KEY }}
+          project-path: ${{ env.PROJECT_PATH }}
+          git-pull: false
+          git-branch: ${{ github.ref_name }}
+          docker-prune: false
+          pre-deploy-command: |
+            echo "🏠 Deploying to Freddy server..."
+
+            # Create project directory if it doesn't exist
+            echo "📁 Ensuring project directory exists..."
+            mkdir -p $HOME/${{ env.PROJECT_PATH }}
+            cd $HOME/${{ env.PROJECT_PATH }}
+
+            # Handle git repository setup
+            if [ -d .git ] && git status >/dev/null 2>&1; then
+              echo "📥 Updating existing repository..."
+              git fetch origin
+              git checkout ${{ github.ref_name }}
+              git pull origin ${{ github.ref_name }} || {
+                echo "⚠️ Git pull failed, doing hard reset..."
+                git reset --hard origin/${{ github.ref_name }}
+              }
+            else
+              echo "📥 Cloning repository (first deployment)..."
+              cd ~
+              rm -rf $HOME/${{ env.PROJECT_PATH }}
+              git clone https://github.com/${{ github.repository }}.git $HOME/${{ env.PROJECT_PATH }}
+              cd $HOME/${{ env.PROJECT_PATH }}
+              git checkout ${{ github.ref_name }}
+            fi
+
+            # Ensure run.sh is executable
+            chmod +x ./run.sh 2>/dev/null || true
+
+            echo "🔐 Setting up .env file..."
+            # Try run.sh first (primary method)
+            ENV_CREATED=false
+            if [ -f ./run.sh ]; then
+              echo "   ▶ Running: bash ./run.sh setup-env"
+              bash ./run.sh setup-env 2>&1 || true
+              if [ -f .env ] && [ -s .env ]; then
+                echo "   ✅ .env exists after run.sh ($(wc -l < .env) lines)"
+                ENV_CREATED=true
+              fi
+            fi
+
+            # Fallback: create .env directly
+            if [ "$ENV_CREATED" != "true" ]; then
+              echo "   🔄 Fallback: Creating .env directly..."
+              GEN_PASS() { openssl rand -base64 24 2>/dev/null | tr -d '/+=' | head -c 16 || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1; }
+              GEN_SECRET() { openssl rand -hex 16 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1; }
+              cat > .env << 'ENVEOF'
+            # Freddy Home Server - Auto-generated by CI/CD fallback
+            ENVEOF
+              # Generate with variable expansion
+              cat >> .env << ENVEOF
+            TZ=${{ secrets.TZ || 'America/Toronto' }}
+            PUID=${{ secrets.PUID || '1000' }}
+            PGID=${{ secrets.PGID || '1000' }}
+            PHOTOPRISM_ADMIN_PASSWORD=$(GEN_PASS)
+            PHOTOPRISM_DB_NAME=photoprism
+            PHOTOPRISM_DB_USER=photoprism
+            PHOTOPRISM_DB_PASSWORD=$(GEN_PASS)
+            NEXTCLOUD_DB_NAME=nextcloud
+            NEXTCLOUD_DB_USER=nextcloud
+            NEXTCLOUD_DB_PASSWORD=$(GEN_PASS)
+            NEXTCLOUD_ADMIN_USER=admin
+            NEXTCLOUD_ADMIN_PASSWORD=$(GEN_PASS)
+            AUTHENTIK_SECRET_KEY=$(GEN_SECRET)
+            AUTHENTIK_POSTGRES_USER=authentik
+            AUTHENTIK_POSTGRES_PASSWORD=$(GEN_PASS)
+            SULLIVAN_TAILSCALE_IP=${{ secrets.SULLIVAN_TAILSCALE_IP || '100.87.125.19' }}
+            MEDIA_PATH_AUDIOBOOKS=${{ secrets.MEDIA_PATH_AUDIOBOOKS || '/media/audiobooks' }}
+            AUTHENTIK_SECRET_KEY=$(GEN_SECRET)$(GEN_SECRET)
+            AUTHENTIK_POSTGRES_USER=authentik
+            AUTHENTIK_POSTGRES_PASSWORD=$(GEN_PASS)
+            ENVEOF
+              sed -i 's/^            //' .env
+              echo "   ✅ Fallback .env created ($(wc -l < .env) lines)"
+            fi
+
+            # Verify critical keys
+            MISSING_KEYS=0
+            MISSING_NAMES=""
+            for key in TZ PHOTOPRISM_ADMIN_PASSWORD NEXTCLOUD_ADMIN_PASSWORD AUTHENTIK_SECRET_KEY AUTHENTIK_POSTGRES_PASSWORD; do
+              if ! grep -q "^${key}=" .env 2>/dev/null; then
+                MISSING_KEYS=$((MISSING_KEYS + 1))
+                MISSING_NAMES="$MISSING_NAMES $key"
+              fi
+            done
+            if [ "$MISSING_KEYS" -gt 2 ]; then
+              echo "   ❌ Too many critical keys missing ($MISSING_KEYS):$MISSING_NAMES"
+              exit 1
+            fi
+            echo "   ✅ .env verification passed ($(grep -c '^[A-Z_]' .env 2>/dev/null || echo '?') keys)"
+
+            # Inject secrets from GitHub Actions (if provided)
+            echo "🔐 Injecting secrets from GitHub Actions..."
+            if [ -n "${{ secrets.PHOTOPRISM_ADMIN_PASSWORD }}" ]; then
+              sed -i "s/^PHOTOPRISM_ADMIN_PASSWORD=.*/PHOTOPRISM_ADMIN_PASSWORD=${{ secrets.PHOTOPRISM_ADMIN_PASSWORD }}/" .env
+            fi
+            if [ -n "${{ secrets.PHOTOPRISM_DB_PASSWORD }}" ]; then
+              sed -i "s/^PHOTOPRISM_DB_PASSWORD=.*/PHOTOPRISM_DB_PASSWORD=${{ secrets.PHOTOPRISM_DB_PASSWORD }}/" .env
+            fi
+            if [ -n "${{ secrets.NEXTCLOUD_DB_PASSWORD }}" ]; then
+              sed -i "s/^NEXTCLOUD_DB_PASSWORD=.*/NEXTCLOUD_DB_PASSWORD=${{ secrets.NEXTCLOUD_DB_PASSWORD }}/" .env
+            fi
+            if [ -n "${{ secrets.NEXTCLOUD_ADMIN_USER }}" ]; then
+              sed -i "s/^NEXTCLOUD_ADMIN_USER=.*/NEXTCLOUD_ADMIN_USER=${{ secrets.NEXTCLOUD_ADMIN_USER }}/" .env
+            fi
+            if [ -n "${{ secrets.NEXTCLOUD_ADMIN_PASSWORD }}" ]; then
+              sed -i "s/^NEXTCLOUD_ADMIN_PASSWORD=.*/NEXTCLOUD_ADMIN_PASSWORD=${{ secrets.NEXTCLOUD_ADMIN_PASSWORD }}/" .env
+            fi
+            if [ -n "${{ secrets.AUTHENTIK_SECRET_KEY }}" ]; then
+              sed -i "s/^AUTHENTIK_SECRET_KEY=.*/AUTHENTIK_SECRET_KEY=${{ secrets.AUTHENTIK_SECRET_KEY }}/" .env
+            fi
+            if [ -n "${{ secrets.AUTHENTIK_POSTGRES_PASSWORD }}" ]; then
+              sed -i "s/^AUTHENTIK_POSTGRES_PASSWORD=.*/AUTHENTIK_POSTGRES_PASSWORD=${{ secrets.AUTHENTIK_POSTGRES_PASSWORD }}/" .env
+            fi
+            echo "   ✅ Secrets injected"
+            chmod 600 .env
+
+            echo ""
+
+            # Ensure all bind-mount directories for Docker volumes exist
+            echo "📁 Ensuring volume mount directories exist..."
+            docker run --rm -v /mnt/1tb:/mnt busybox sh -c "\
+              mkdir -p \
+                /mnt/photos \
+                /mnt/photoprism/storage \
+                /mnt/photoprism/postgres \
+                /mnt/nextcloud/html \
+                /mnt/nextcloud/config \
+                /mnt/nextcloud/data \
+                /mnt/nextcloud/postgres \
+                /mnt/homeassistant \
+                /mnt/audiobookshelf/audiobooks \
+                /mnt/audiobookshelf/config \
+                /mnt/audiobookshelf/metadata \
+                /mnt/authentik/postgres \
+                /mnt/authentik/redis \
+                /mnt/authentik/media \
+                /mnt/authentik/templates \
+                /mnt/uptime-kuma \
+              && chown -R 33:33 /mnt/nextcloud/html /mnt/nextcloud/config /mnt/nextcloud/data \
+              && echo '  ✅ Volume directories ready'"
+
+            # Full Nextcloud reset if requested
+            if [ "${{ inputs.reset_nextcloud_db }}" = "true" ]; then
+              echo "🔄 Performing full Nextcloud reset..."
+              echo "   ⚠️  This will DELETE database, config, and app files!"
+              echo "   ℹ️  User data in /mnt/1tb/nextcloud/data is preserved."
+              docker stop nextcloud nextcloud-cron nextcloud-postgres 2>/dev/null || true
+              docker rm nextcloud nextcloud-cron nextcloud-postgres 2>/dev/null || true
+              docker run --rm -v /mnt/1tb:/mnt busybox sh -c "\
+                echo '  → Removing PostgreSQL data...' \
+                && rm -rf /mnt/nextcloud/postgres/* \
+                && echo '  → Removing stale config (config.php)...' \
+                && rm -rf /mnt/nextcloud/config/* \
+                && echo '  → Removing app files (will be re-extracted from image)...' \
+                && rm -rf /mnt/nextcloud/html/* \
+                && echo '  → Re-creating directories with correct ownership...' \
+                && mkdir -p /mnt/nextcloud/html /mnt/nextcloud/config /mnt/nextcloud/data /mnt/nextcloud/postgres \
+                && chown -R 33:33 /mnt/nextcloud/html /mnt/nextcloud/config /mnt/nextcloud/data \
+                && echo '  ✅ Nextcloud full reset complete (will reinitialize on next start)'"
+            fi
+
+            # Stop existing services to release file locks
+            echo "🛑 Stopping existing services..."
+            if [ -d "$HOME/${{ env.PROJECT_PATH }}" ]; then
+              cd $HOME/${{ env.PROJECT_PATH }}
+              ./run.sh stop 2>/dev/null || docker compose down 2>/dev/null || true
+              cd ~
+            fi
+
+            # Load environment variables
+            if [ -f .env ]; then
+              set -a && source .env && set +a
+              echo "✓ Environment loaded"
+            fi
+
+          deploy-command: |
+            # Action already cd's to PROJECT_PATH; use absolute path as safeguard
+            cd $HOME/${{ env.PROJECT_PATH }}
+
+            # Stop and remove existing containers + networks
+            echo "🐳 Stopping existing services..."
+            docker compose down --remove-orphans 2>/dev/null || true
+
+            # Remove stale audiobookshelf volumes (created with bad paths before fix)
+            echo "🧹 Removing stale audiobookshelf volumes (if any)..."
+            docker volume rm freddy_audiobookshelf_data freddy_audiobookshelf_config freddy_audiobookshelf_metadata 2>/dev/null || true
+
+            # Build nginx image (uses cache — only rebuilds if Dockerfile/config changed)
+            echo "🔨 Building nginx image..."
+            docker compose build nginx
+
+            # Pull latest images and start all services in one pass
+            echo "🚀 Pulling images & starting all services..."
+            docker compose up -d --pull always --force-recreate --remove-orphans
+
+            echo "✅ Deployment complete"
+
+          post-deploy-command: |
+            cd $HOME/${{ env.PROJECT_PATH }}
+            echo ""
+            echo "📊 Service Status:"
+            docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker ps --format "table {{.Names}}\t{{.Status}}"
+            echo ""
+            echo "✅ Deployment complete!"
+
+      # ======================================================================
+      # HEALTH CHECKS
+      # ======================================================================
+      - name: 🏥 Run Health Checks
+        id: health-checks
+        if: always() && steps.deploy.outcome == 'success'
+        uses: nuniesmith/actions/.github/actions/health-check@main
+        with:
+          containers: nginx photoprism nextcloud homeassistant audiobookshelf authentik-server uptime-kuma
+          ssh-host: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          ssh-port: ${{ secrets.SSH_PORT || '22' }}
+          ssh-user: ${{ secrets.SSH_USER || 'actions' }}
+          ssh-key: ${{ secrets.SSH_KEY }}
+          initial-delay: 30
+          retry-count: 3
+          retry-delay: 10
+          fail-on-unhealthy: false
+
+      # ======================================================================
+      # DISCORD NOTIFICATION (Optional)
+      # ======================================================================
+      - name: 📣 Notify deployment
         if: always()
+        uses: nuniesmith/actions/.github/actions/discord-notify@main
+        continue-on-error: true
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_ACTIONS }}
+          title: "🏠 Freddy Deployment"
+          description: "Personal services server deployment"
+          status: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
+          include-repo-info: true
+          fields: |
+            [
+              {"name": "Server", "value": "Freddy", "inline": true},
+              {"name": "Branch", "value": "${{ github.ref_name }}", "inline": true},
+              {"name": "Health", "value": "${{ steps.health-checks.outputs.healthy == 'true' && '✅ Healthy' || '⚠️ Check Required' }}", "inline": true}
+            ]
 
-        steps:
-            - name: 📊 Generate summary
-              run: |
-                  echo "## 🏠 Freddy Deployment Summary" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
-                  echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+  # ==========================================================================
+  # PIPELINE SUMMARY
+  # ==========================================================================
+  summary:
+    name: 📊 Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [deploy]
+    if: always()
+    steps:
+      - name: 📊 Generate summary
+        run: |
+          echo "## 🏠 Freddy Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
 
-                  # DNS Update status
-                  if [ "${{ needs.dns-update.result }}" = "success" ]; then
-                    echo "| 🌐 DNS Update | ✅ Success |" >> $GITHUB_STEP_SUMMARY
-                  elif [ "${{ needs.dns-update.result }}" = "skipped" ]; then
-                    echo "| 🌐 DNS Update | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "| 🌐 DNS Update | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-                  fi
+          # Deploy status
+          if [ "${{ needs.deploy.result }}" = "success" ]; then
+            echo "| 🚀 Deploy | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.deploy.result }}" = "skipped" ]; then
+            echo "| 🚀 Deploy | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🚀 Deploy | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
 
-                  # Deploy status (includes SSL generation)
-                  if [ "${{ needs.deploy.result }}" = "success" ]; then
-                    echo "| 🚀 Deploy (SSL + Services) | ✅ Success |" >> $GITHUB_STEP_SUMMARY
-                  elif [ "${{ needs.deploy.result }}" = "skipped" ]; then
-                    echo "| 🚀 Deploy (SSL + Services) | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "| 🚀 Deploy (SSL + Services) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-                  fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Server:** Freddy (Personal Services)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Domain:** ${{ env.DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
 
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "### 📋 Details" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Server:** Freddy (Personal Services)" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Domain:** ${{ env.DOMAIN }}" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "### 🔧 Architecture" >> $GITHUB_STEP_SUMMARY
-                  echo "- All DNS records point to Freddy's Tailscale IP" >> $GITHUB_STEP_SUMMARY
-                  echo "- Freddy's nginx reverse proxies Sullivan services over Tailscale" >> $GITHUB_STEP_SUMMARY
-                  echo "- SSL certificates cover both Freddy and Sullivan subdomains" >> $GITHUB_STEP_SUMMARY
-
-            - name: 📋 SSL Certificate Summary
-              run: |
-                  echo "## 🔐 SSL Certificate Status" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-
-                  if [ "${{ needs.deploy.outputs.cert_exists }}" == "true" ]; then
-                    echo "✅ **Certificate Status:** Valid" >> $GITHUB_STEP_SUMMARY
-                    echo "📅 **Expires:** ${{ needs.deploy.outputs.expiry_date }}" >> $GITHUB_STEP_SUMMARY
-                    echo "⏰ **Days Remaining:** ${{ needs.deploy.outputs.days_until_expiry }}" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-
-                    if [ "${{ needs.deploy.outputs.needs_renewal }}" == "true" ]; then
-                      echo "⚠️ Certificates were renewed during this deployment" >> $GITHUB_STEP_SUMMARY
-                    else
-                      echo "✅ Certificates are valid - renewal skipped" >> $GITHUB_STEP_SUMMARY
-                    fi
-                  else
-                    echo "⚠️ **Certificate Status:** New certificates generated" >> $GITHUB_STEP_SUMMARY
-                  fi
-
-            - name: ❌ Fail on deployment error
-              if: needs.deploy.result == 'failure'
-              run: |
-                  echo "❌ Deployment failed"
-                  exit 1
+      - name: ❌ Fail on deployment error
+        if: needs.deploy.result == 'failure'
+        run: |
+          echo "❌ Deployment failed"
+          exit 1
