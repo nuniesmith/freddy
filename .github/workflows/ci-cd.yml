@@ -162,6 +162,17 @@ jobs:
             AUTHENTIK_POSTGRES_PASSWORD=$(GEN_PASS)
             SULLIVAN_TAILSCALE_IP=${{ secrets.SULLIVAN_TAILSCALE_IP || '100.87.125.19' }}
             MEDIA_PATH_AUDIOBOOKS=${{ secrets.MEDIA_PATH_AUDIOBOOKS || '/media/audiobooks' }}
+            SHELFMARK_API_TOKEN=
+            AUDIOBOOKSHELF_API_TOKEN=
+            AUDIOBOOKSHELF_LIBRARY_ID=
+            PROWLARR_URL=
+            PROWLARR_API_KEY=
+            QBITTORRENT_URL=
+            QBITTORRENT_USERNAME=
+            QBITTORRENT_PASSWORD=
+            DISCORD_BOT_TOKEN=
+            SHELFMARK_DISCORD_GUILD_ID=
+            SHELFMARK_DISCORD_ALLOWED_ROLE_IDS=
             AUTHENTIK_SECRET_KEY=$(GEN_SECRET)$(GEN_SECRET)
             AUTHENTIK_POSTGRES_USER=authentik
             AUTHENTIK_POSTGRES_PASSWORD=$(GEN_PASS)
@@ -208,6 +219,37 @@ jobs:
             if [ -n "${{ secrets.AUTHENTIK_POSTGRES_PASSWORD }}" ]; then
               sed -i "s/^AUTHENTIK_POSTGRES_PASSWORD=.*/AUTHENTIK_POSTGRES_PASSWORD=${{ secrets.AUTHENTIK_POSTGRES_PASSWORD }}/" .env
             fi
+
+            # Shelfmark. Every one of these is optional: the API and worker
+            # start with them blank, and a wrong value returns a 502 from the
+            # affected route rather than taking the service down. A missing
+            # secret is a degraded feature, never a failed deploy — add it and
+            # the next deploy picks it up.
+            #
+            # Rewrite-by-filter rather than `sed -i s/^KEY=.*/`: sed only
+            # substitutes when the line already exists, and it reads a / in the
+            # value as its delimiter. Tokens contain slashes.
+            upsert_env() {
+              key="$1"; value="$2"
+              [ -z "$value" ] && return 0
+              grep -v "^${key}=" .env > .env.tmp 2>/dev/null || true
+              printf '%s=%s\n' "$key" "$value" >> .env.tmp
+              mv .env.tmp .env
+              echo "  ✓ ${key} configured"
+            }
+
+            upsert_env SHELFMARK_API_TOKEN "${{ secrets.SHELFMARK_API_TOKEN }}"
+            upsert_env AUDIOBOOKSHELF_API_TOKEN "${{ secrets.AUDIOBOOKSHELF_API_TOKEN }}"
+            upsert_env AUDIOBOOKSHELF_LIBRARY_ID "${{ secrets.AUDIOBOOKSHELF_LIBRARY_ID }}"
+            upsert_env PROWLARR_URL "${{ secrets.PROWLARR_URL }}"
+            upsert_env PROWLARR_API_KEY "${{ secrets.PROWLARR_API_KEY }}"
+            upsert_env QBITTORRENT_URL "${{ secrets.QBITTORRENT_URL }}"
+            upsert_env QBITTORRENT_USERNAME "${{ secrets.QBITTORRENT_USERNAME }}"
+            upsert_env QBITTORRENT_PASSWORD "${{ secrets.QBITTORRENT_PASSWORD }}"
+            upsert_env DISCORD_BOT_TOKEN "${{ secrets.DISCORD_BOT_TOKEN }}"
+            upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
+            upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
+
             echo "   ✅ Secrets injected"
             chmod 600 .env
 
