@@ -132,6 +132,40 @@ volumes:
             type: none
             o: bind
             device: /mnt/1tb/uptime-kuma
+    # Shelfmark - audiobook/ebook organiser and request service
+    # audiobookshelf_data is reused rather than re-bound: both services must see
+    # the same /mnt/1tb/audiobooks tree, and two bind volumes to one path would
+    # be two names for the same thing waiting to drift.
+    shelfmark_ebooks:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: /mnt/1tb/ebooks
+    shelfmark_data:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: /mnt/1tb/shelfmark/data
+    shelfmark_incoming:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: /mnt/1tb/shelfmark/incoming
+    shelfmark_work:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: /mnt/1tb/shelfmark/work
+    shelfmark_quarantine:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: /mnt/1tb/shelfmark/quarantine
 
 # Single network for all services - simple and reliable DNS resolution
 networks:
@@ -548,3 +582,148 @@ services:
             resources:
                 limits:
                     memory: 512M
+
+    # =============================================================================
+    # SHELFMARK - audiobook/ebook organiser, request API, and Discord bot
+    # =============================================================================
+    # Image is published by nuniesmith/shelfmark CI; this host does not build it.
+    #
+    # Port 8110 is published on all interfaces, matching audiobookshelf (13378)
+    # and the other services here. Princess reaches this host over Tailscale at
+    # 100.106.65.55, so a loopback-only bind would make shelfmark.7gram.xyz
+    # unroutable. 8080 is already Nextcloud's, which is why not that.
+    #
+    # Upstreams. Prowlarr and qBittorrent use their public 7gram names: Sullivan
+    # is a different Docker host, and Tailscale MagicDNS does NOT resolve inside
+    # a container (http://sullivan:9696 times out from here, measured), so a name
+    # that works means a Princess-published one.
+    #
+    # Audiobookshelf is the exception and deliberately uses the container name.
+    # It runs in this very Compose project, and abs.7gram.xyz would leave the
+    # machine, cross the internet to Princess in Toronto, and come back over
+    # Tailscale to reach a container on the same bridge. Measured from a
+    # container here: 0.0014s by container name, 0.138s via the public name —
+    # 100x, to talk to a neighbour. It also makes an internal call depend on
+    # Linode being up. Override AUDIOBOOKSHELF_URL if that is ever wanted.
+    #
+    # The user is pinned to jordan:actions (1000:1001) rather than PUID/PGID.
+    # The three trees it writes are owned differently — /mnt/1tb/audiobooks is
+    # jordan:actions, /mnt/1tb/ebooks is actions:actions, /mnt/1tb/shelfmark is
+    # jordan:actions — and all three are mode 2775, so that one uid/gid pair is
+    # the only combination with write access to every one of them without a
+    # chown. PUID/PGID here is 1000:1000, which cannot write /mnt/1tb/ebooks.
+
+    shelfmark-api:
+        image: ghcr.io/nuniesmith/shelfmark:latest
+        container_name: shelfmark-api
+        user: "${SHELFMARK_UID:-1000}:${SHELFMARK_GID:-1001}"
+        command: ["shelfmark-api"]
+        ports:
+            - "8110:8000"
+        volumes:
+            - audiobookshelf_data:/audiobooks
+            - shelfmark_ebooks:/ebooks
+            - shelfmark_data:/data
+            - shelfmark_incoming:/incoming
+            - shelfmark_work:/work
+            - shelfmark_quarantine:/quarantine
+        environment:
+            <<: *common-env
+            SHELFMARK_DB_PATH: /data/shelfmark.db
+            SHELFMARK_AUDIOBOOKS_ROOT: /audiobooks
+            SHELFMARK_EBOOKS_ROOT: /ebooks
+            SHELFMARK_INCOMING_ROOT: /incoming
+            SHELFMARK_WORK_ROOT: /work
+            SHELFMARK_QUARANTINE_ROOT: /quarantine
+            SHELFMARK_API_TOKEN: ${SHELFMARK_API_TOKEN:-}
+            AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
+            AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
+            AUDIOBOOKSHELF_LIBRARY_ID: ${AUDIOBOOKSHELF_LIBRARY_ID:-}
+            PROWLARR_URL: ${PROWLARR_URL:-https://prowlarr.7gram.xyz}
+            PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
+            QBITTORRENT_URL: ${QBITTORRENT_URL:-https://qbt.7gram.xyz}
+            QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
+            QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
+        networks:
+            - freddy
+        restart: unless-stopped
+        logging: *default-logging
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)\" || exit 1",
+                ]
+            <<: *healthcheck-defaults
+            start_period: 20s
+        deploy:
+            resources:
+                limits:
+                    memory: 512M
+
+    shelfmark-worker:
+        image: ghcr.io/nuniesmith/shelfmark:latest
+        container_name: shelfmark-worker
+        user: "${SHELFMARK_UID:-1000}:${SHELFMARK_GID:-1001}"
+        command: ["shelfmark-worker"]
+        volumes:
+            - audiobookshelf_data:/audiobooks
+            - shelfmark_ebooks:/ebooks
+            - shelfmark_data:/data
+            - shelfmark_incoming:/incoming
+            - shelfmark_work:/work
+            - shelfmark_quarantine:/quarantine
+        environment:
+            <<: *common-env
+            SHELFMARK_DB_PATH: /data/shelfmark.db
+            SHELFMARK_AUDIOBOOKS_ROOT: /audiobooks
+            SHELFMARK_EBOOKS_ROOT: /ebooks
+            SHELFMARK_INCOMING_ROOT: /incoming
+            SHELFMARK_WORK_ROOT: /work
+            SHELFMARK_QUARANTINE_ROOT: /quarantine
+            SHELFMARK_WORKER_ID: freddy-shelfmark-worker
+            AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
+            AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
+            AUDIOBOOKSHELF_LIBRARY_ID: ${AUDIOBOOKSHELF_LIBRARY_ID:-}
+            PROWLARR_URL: ${PROWLARR_URL:-https://prowlarr.7gram.xyz}
+            PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
+            QBITTORRENT_URL: ${QBITTORRENT_URL:-https://qbt.7gram.xyz}
+            QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
+            QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
+        networks:
+            - freddy
+        restart: unless-stopped
+        logging: *default-logging
+        deploy:
+            resources:
+                limits:
+                    memory: 512M
+
+    # Held behind a profile: the bot exits immediately without DISCORD_BOT_TOKEN,
+    # and `restart: unless-stopped` would turn that into a crash loop. Start it
+    # with `docker compose --profile discord up -d shelfmark-bot` once the token
+    # and SHELFMARK_API_TOKEN are in .env.
+    shelfmark-bot:
+        image: ghcr.io/nuniesmith/shelfmark:latest
+        container_name: shelfmark-bot
+        command: ["shelfmark-bot"]
+        profiles:
+            - discord
+        environment:
+            <<: *common-env
+            SHELFMARK_API_URL: http://shelfmark-api:8000
+            SHELFMARK_API_TOKEN: ${SHELFMARK_API_TOKEN:-}
+            DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+            SHELFMARK_DISCORD_GUILD_ID: ${SHELFMARK_DISCORD_GUILD_ID:-}
+            SHELFMARK_DISCORD_ALLOWED_ROLE_IDS: ${SHELFMARK_DISCORD_ALLOWED_ROLE_IDS:-}
+        depends_on:
+            shelfmark-api:
+                condition: service_healthy
+        networks:
+            - freddy
+        restart: unless-stopped
+        logging: *default-logging
+        deploy:
+            resources:
+                limits:
+                    memory: 256M
