@@ -250,6 +250,25 @@ jobs:
             upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
             upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
 
+            # Private key for the restricted shelfmark-sync account on sullivan.
+            # Written here rather than by hand because ssh refuses a private key
+            # that is group- or world-readable, and this step runs as the same
+            # user the containers do (actions, uid 1001) — so the file lands
+            # owned by the right uid at mode 600 without a chown.
+            if [ -n "${{ secrets.SHELFMARK_SULLIVAN_SSH_KEY }}" ]; then
+              mkdir -p /mnt/1tb/shelfmark/ssh
+              chmod 700 /mnt/1tb/shelfmark/ssh
+              printf '%s\n' "${{ secrets.SHELFMARK_SULLIVAN_SSH_KEY }}" > /mnt/1tb/shelfmark/ssh/id_ed25519
+              chmod 600 /mnt/1tb/shelfmark/ssh/id_ed25519
+              echo "  ✓ sullivan sync key installed"
+            else
+              # The bind mount needs its directory to exist even when empty, or
+              # Compose creates it as root and the containers cannot read it.
+              mkdir -p /mnt/1tb/shelfmark/ssh
+              chmod 700 /mnt/1tb/shelfmark/ssh
+              echo "  · sullivan sync key not set — transfers stay unconfigured"
+            fi
+
             echo "   ✅ Secrets injected"
             chmod 600 .env
 

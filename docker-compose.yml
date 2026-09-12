@@ -166,6 +166,16 @@ volumes:
             type: none
             o: bind
             device: /mnt/1tb/shelfmark/quarantine
+    # Private key for the restricted shelfmark-sync account on sullivan. Written
+    # by CI as the actions user so it lands mode 600 owned by uid 1001, which is
+    # what the containers run as — ssh refuses a group-readable private key, so
+    # this cannot be created by hand as another user.
+    shelfmark_ssh:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: /mnt/1tb/shelfmark/ssh
 
 # Single network for all services - simple and reliable DNS resolution
 networks:
@@ -634,6 +644,7 @@ services:
             - shelfmark_incoming:/incoming
             - shelfmark_work:/work
             - shelfmark_quarantine:/quarantine
+            - shelfmark_ssh:/run/secrets:ro
         environment:
             <<: *common-env
             SHELFMARK_DB_PATH: /data/shelfmark.db
@@ -642,6 +653,10 @@ services:
             SHELFMARK_INCOMING_ROOT: /incoming
             SHELFMARK_WORK_ROOT: /work
             SHELFMARK_QUARANTINE_ROOT: /quarantine
+            SULLIVAN_SSH_HOST: ${SULLIVAN_SSH_HOST:-100.87.125.19}
+            SULLIVAN_SSH_USER: ${SULLIVAN_SSH_USER:-shelfmark-sync}
+            SULLIVAN_SSH_IDENTITY_FILE: /run/secrets/id_ed25519
+            SULLIVAN_COMPLETED_ROOT: ${SULLIVAN_COMPLETED_ROOT:-/}
             SHELFMARK_API_TOKEN: ${SHELFMARK_API_TOKEN:-}
             AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
             AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
@@ -680,6 +695,7 @@ services:
             - shelfmark_incoming:/incoming
             - shelfmark_work:/work
             - shelfmark_quarantine:/quarantine
+            - shelfmark_ssh:/run/secrets:ro
         environment:
             <<: *common-env
             SHELFMARK_DB_PATH: /data/shelfmark.db
@@ -688,6 +704,10 @@ services:
             SHELFMARK_INCOMING_ROOT: /incoming
             SHELFMARK_WORK_ROOT: /work
             SHELFMARK_QUARANTINE_ROOT: /quarantine
+            SULLIVAN_SSH_HOST: ${SULLIVAN_SSH_HOST:-100.87.125.19}
+            SULLIVAN_SSH_USER: ${SULLIVAN_SSH_USER:-shelfmark-sync}
+            SULLIVAN_SSH_IDENTITY_FILE: /run/secrets/id_ed25519
+            SULLIVAN_COMPLETED_ROOT: ${SULLIVAN_COMPLETED_ROOT:-/}
             SHELFMARK_WORKER_ID: freddy-shelfmark-worker
             AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
             AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
