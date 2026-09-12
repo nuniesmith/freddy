@@ -606,17 +606,24 @@ services:
     # 100x, to talk to a neighbour. It also makes an internal call depend on
     # Linode being up. Override AUDIOBOOKSHELF_URL if that is ever wanted.
     #
-    # The user is pinned to jordan:actions (1000:1001) rather than PUID/PGID.
-    # The three trees it writes are owned differently — /mnt/1tb/audiobooks is
-    # jordan:actions, /mnt/1tb/ebooks is actions:actions, /mnt/1tb/shelfmark is
-    # jordan:actions — and all three are mode 2775, so that one uid/gid pair is
-    # the only combination with write access to every one of them without a
-    # chown. PUID/PGID here is 1000:1000, which cannot write /mnt/1tb/ebooks.
+    # The user is actions:actions (1001:1001), not PUID/PGID, and not jordan.
+    # Deployment creates /mnt/1tb/shelfmark/data itself as actions:actions mode
+    # 755, so only uid 1001 can write it — an earlier attempt to run as
+    # jordan:actions crash-looped both containers on "unable to open database
+    # file". 1001 also reaches the other trees: it owns /mnt/1tb/ebooks, and
+    # /mnt/1tb/audiobooks is jordan:actions mode 2775 so the actions group
+    # carries write there. Verified against all four mounts:
+    #
+    #     as 1001:1001   /data OK   /incoming OK   /ebooks OK   /audiobooks OK
+    #     as 1000:1001   /data DENIED
+    #
+    # PUID/PGID on this host is 1000:1000, which reaches neither /data nor
+    # /mnt/1tb/ebooks, which is why these are separate variables.
 
     shelfmark-api:
         image: ghcr.io/nuniesmith/shelfmark:latest
         container_name: shelfmark-api
-        user: "${SHELFMARK_UID:-1000}:${SHELFMARK_GID:-1001}"
+        user: "${SHELFMARK_UID:-1001}:${SHELFMARK_GID:-1001}"
         command: ["shelfmark-api"]
         ports:
             - "8110:8000"
@@ -664,7 +671,7 @@ services:
     shelfmark-worker:
         image: ghcr.io/nuniesmith/shelfmark:latest
         container_name: shelfmark-worker
-        user: "${SHELFMARK_UID:-1000}:${SHELFMARK_GID:-1001}"
+        user: "${SHELFMARK_UID:-1001}:${SHELFMARK_GID:-1001}"
         command: ["shelfmark-worker"]
         volumes:
             - audiobookshelf_data:/audiobooks
