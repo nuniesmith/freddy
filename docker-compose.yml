@@ -587,9 +587,24 @@ services:
     # SHELFMARK - audiobook/ebook organiser, request API, and Discord bot
     # =============================================================================
     # Image is published by nuniesmith/shelfmark CI; this host does not build it.
-    # The API is bound to loopback on purpose — Princess terminates TLS for
-    # shelfmark.7gram.xyz and reaches it over the private tunnel. Container-to-
-    # container traffic uses the service name on the freddy network instead.
+    #
+    # Port 8110 is published on all interfaces, matching audiobookshelf (13378)
+    # and the other services here. Princess reaches this host over Tailscale at
+    # 100.106.65.55, so a loopback-only bind would make shelfmark.7gram.xyz
+    # unroutable. 8080 is already Nextcloud's, which is why not that.
+    #
+    # Upstreams. Prowlarr and qBittorrent use their public 7gram names: Sullivan
+    # is a different Docker host, and Tailscale MagicDNS does NOT resolve inside
+    # a container (http://sullivan:9696 times out from here, measured), so a name
+    # that works means a Princess-published one.
+    #
+    # Audiobookshelf is the exception and deliberately uses the container name.
+    # It runs in this very Compose project, and abs.7gram.xyz would leave the
+    # machine, cross the internet to Princess in Toronto, and come back over
+    # Tailscale to reach a container on the same bridge. Measured from a
+    # container here: 0.0014s by container name, 0.138s via the public name —
+    # 100x, to talk to a neighbour. It also makes an internal call depend on
+    # Linode being up. Override AUDIOBOOKSHELF_URL if that is ever wanted.
     #
     # The user is pinned to jordan:actions (1000:1001) rather than PUID/PGID.
     # The three trees it writes are owned differently — /mnt/1tb/audiobooks is
@@ -604,7 +619,7 @@ services:
         user: "${SHELFMARK_UID:-1000}:${SHELFMARK_GID:-1001}"
         command: ["shelfmark-api"]
         ports:
-            - "127.0.0.1:8110:8000"
+            - "8110:8000"
         volumes:
             - audiobookshelf_data:/audiobooks
             - shelfmark_ebooks:/ebooks
@@ -621,12 +636,12 @@ services:
             SHELFMARK_WORK_ROOT: /work
             SHELFMARK_QUARANTINE_ROOT: /quarantine
             SHELFMARK_API_TOKEN: ${SHELFMARK_API_TOKEN:-}
-            AUDIOBOOKSHELF_URL: http://audiobookshelf:80
+            AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
             AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
             AUDIOBOOKSHELF_LIBRARY_ID: ${AUDIOBOOKSHELF_LIBRARY_ID:-}
-            PROWLARR_URL: ${PROWLARR_URL:-}
+            PROWLARR_URL: ${PROWLARR_URL:-https://prowlarr.7gram.xyz}
             PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
-            QBITTORRENT_URL: ${QBITTORRENT_URL:-}
+            QBITTORRENT_URL: ${QBITTORRENT_URL:-https://qbt.7gram.xyz}
             QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
             QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
         networks:
@@ -667,12 +682,12 @@ services:
             SHELFMARK_WORK_ROOT: /work
             SHELFMARK_QUARANTINE_ROOT: /quarantine
             SHELFMARK_WORKER_ID: freddy-shelfmark-worker
-            AUDIOBOOKSHELF_URL: http://audiobookshelf:80
+            AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
             AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
             AUDIOBOOKSHELF_LIBRARY_ID: ${AUDIOBOOKSHELF_LIBRARY_ID:-}
-            PROWLARR_URL: ${PROWLARR_URL:-}
+            PROWLARR_URL: ${PROWLARR_URL:-https://prowlarr.7gram.xyz}
             PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
-            QBITTORRENT_URL: ${QBITTORRENT_URL:-}
+            QBITTORRENT_URL: ${QBITTORRENT_URL:-https://qbt.7gram.xyz}
             QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
             QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
         networks:
