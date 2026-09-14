@@ -250,6 +250,26 @@ jobs:
             upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
             upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
 
+            # `shelfmark-bot` is the only service behind a Compose profile
+            # (`discord`), and `docker compose up -d` SKIPS profiled services
+            # in silence — no error, no container, nothing in the deploy log to
+            # notice. Setting the token and getting no bot, with no failure
+            # anywhere to explain it, is the obvious trap here.
+            #
+            # Compose reads COMPOSE_PROFILES from this same .env, so tying it
+            # to the token means setting the secret is all that is needed.
+            if [ -n "${{ secrets.DISCORD_BOT_TOKEN }}" ]; then
+              upsert_env COMPOSE_PROFILES "discord"
+              echo "  ✓ discord profile active — shelfmark-bot will start"
+            else
+              # Drop the key rather than writing an empty one: an empty
+              # COMPOSE_PROFILES is a valid "no profiles" setting, but leaving
+              # a stale "discord" behind would start a bot with no token.
+              grep -v "^COMPOSE_PROFILES=" .env > .env.tmp 2>/dev/null || true
+              mv .env.tmp .env
+              echo "  · discord profile inactive — no DISCORD_BOT_TOKEN set"
+            fi
+
             # Private key for the restricted shelfmark-sync account on sullivan.
             # Written here rather than by hand because ssh refuses a private key
             # that is group- or world-readable, and this step runs as the same
