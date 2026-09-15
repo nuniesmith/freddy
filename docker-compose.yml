@@ -721,6 +721,22 @@ services:
             - freddy
         restart: unless-stopped
         logging: *default-logging
+        # The worker serves no HTTP, so this is not a curl probe (the image has
+        # no curl anyway). `shelfmark-worker-healthcheck` reads the same
+        # liveness classifier /readyz uses, so `docker ps` and the API can no
+        # longer disagree about whether the worker is alive.
+        #
+        # Without this the worker had NO healthcheck at all: it could die or
+        # wedge while `docker ps` showed it merely "Up", jobs queued silently,
+        # and nothing surfaced it. That is the whole failure this closes.
+        #
+        # start_period covers the first loop iteration writing its liveness row.
+        # The classifier reports a never-seen worker as "unknown" and exits 0
+        # rather than failing, so this is belt and braces, not load-bearing.
+        healthcheck:
+            test: ["CMD", "shelfmark-worker-healthcheck"]
+            <<: *healthcheck-defaults
+            start_period: 30s
         deploy:
             resources:
                 limits:
