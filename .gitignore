@@ -311,3 +311,5 @@ config/homeassistant/home-assistant_v2.db
 config/homeassistant/home-assistant.log.1
 
 services/audiobookshelf/metadata/*
+# Agent worktrees are checkouts of this same repo; never commit them.
+.claude/

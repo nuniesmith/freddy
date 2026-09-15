@@ -249,6 +249,11 @@ jobs:
             upsert_env DISCORD_BOT_TOKEN "${{ secrets.DISCORD_BOT_TOKEN }}"
             upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
             upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
+            # The WORKER posts pipeline results here, not the bot — a download
+            # that finishes long after the Discord interaction expired has no
+            # interaction left to reply to. Without this the whole unattended
+            # pipeline reports success and failure into a job row nobody reads.
+            upsert_env SHELFMARK_DISCORD_WEBHOOK_URL "${{ secrets.SHELFMARK_DISCORD_WEBHOOK_URL }}"
 
             # `shelfmark-bot` is the only service behind a Compose profile
             # (`discord`), and `docker compose up -d` SKIPS profiled services
