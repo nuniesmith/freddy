@@ -709,6 +709,10 @@ services:
             SULLIVAN_SSH_IDENTITY_FILE: /run/secrets/id_ed25519
             SULLIVAN_COMPLETED_ROOT: ${SULLIVAN_COMPLETED_ROOT:-/}
             SHELFMARK_WORKER_ID: freddy-shelfmark-worker
+            # Where the worker announces a finished book and pages on a failed
+            # chain. Empty is safe: the notifier is best-effort and a missing
+            # URL simply means no notification, never a failed job.
+            SHELFMARK_DISCORD_WEBHOOK_URL: ${SHELFMARK_DISCORD_WEBHOOK_URL:-}
             AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
             AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
             AUDIOBOOKSHELF_LIBRARY_ID: ${AUDIOBOOKSHELF_LIBRARY_ID:-}
