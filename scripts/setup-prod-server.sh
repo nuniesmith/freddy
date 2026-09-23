@@ -364,6 +364,30 @@ setup_users() {
 
     # Set secure umask
     echo "umask 027" >> /home/actions/.bashrc
+
+    # Automation user, separate from the interactive admin so that automated
+    # changes are attributable in logs and revocable on their own --
+    # `userdel -r claude` ends its access without rotating jordan's key.
+    # Created by hand on 2026-09-22; kept here so a rebuild does not lose it.
+    if ! id claude >/dev/null 2>&1; then
+        useradd -m -s /bin/bash -c "Claude automation" claude
+        log_success "User 'claude' created"
+    fi
+    install -d -m 700 -o claude -g claude /home/claude/.ssh
+    CLAUDE_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGe/TXKI4lHF5/8scltcJ+gcSc3GPmD80jt94kfYoq8Z claude@oryx'
+    touch /home/claude/.ssh/authorized_keys
+    # Append, never overwrite, and never twice -- re-running setup must not
+    # drop a key someone else added.
+    grep -qF "$(echo "$CLAUDE_KEY" | awk '{print $2}')" /home/claude/.ssh/authorized_keys 2>/dev/null \
+        || echo "$CLAUDE_KEY" >> /home/claude/.ssh/authorized_keys
+    chown claude:claude /home/claude/.ssh/authorized_keys
+    chmod 600 /home/claude/.ssh/authorized_keys
+    passwd -l claude 2>/dev/null || true
+    usermod -aG docker claude 2>/dev/null || true
+    echo 'claude ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/claude
+    chmod 440 /etc/sudoers.d/claude
+    # A malformed drop-in locks everyone out of root, so validate and revert.
+    visudo -c >/dev/null 2>&1 || { rm -f /etc/sudoers.d/claude; log_error "sudoers invalid - claude sudo reverted"; }
 }
 
 # =============================================================================
@@ -386,7 +410,20 @@ setup_ssh() {
     fi
 
     mkdir -p /etc/ssh/sshd_config.d
-    cat > /etc/ssh/sshd_config.d/99-freddy-hardening.conf <<'EOF'
+
+    # NAMED 00-, NOT 99-. sshd honours the FIRST occurrence of each keyword
+    # across sshd_config.d, which is the opposite of sysctl.d (last wins) --
+    # and Ubuntu's cloud image ships 50-cloud-init.conf containing
+    # "PasswordAuthentication yes".
+    #
+    # As 99- this file lost that one directive silently. Measured on the live
+    # box 2026-09-22: the file said "PasswordAuthentication no" and
+    # `sshd -T` said yes. PermitRootLogin, MaxAuthTries and AllowUsers all
+    # applied, because cloud-init's file does not mention them -- so three of
+    # four directives worked and the hardening looked fine from any spot check
+    # that happened to test one of those three.
+    rm -f /etc/ssh/sshd_config.d/99-freddy-hardening.conf
+    cat > /etc/ssh/sshd_config.d/00-freddy-hardening.conf <<'EOF'
 # Freddy Server SSH Hardening
 
 # Disable root login
@@ -430,7 +467,7 @@ ClientAliveInterval 300
 ClientAliveCountMax 2
 
 # Allow actions and jordan users
-AllowUsers actions jordan
+AllowUsers actions jordan claude
 EOF
 
     case "$DISTRO_FAMILY" in
