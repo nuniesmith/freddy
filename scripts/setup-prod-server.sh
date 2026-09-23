@@ -468,6 +468,24 @@ ClientAliveCountMax 2
 
 # Allow actions and jordan users
 AllowUsers actions jordan claude
+
+# Password auth stays available ON THE TAILNET ONLY.
+#
+# jordans-iphone authenticates by password and has no key -- auth.log shows
+# password logins for jordan from the phone, from macbook15, and 13 times from
+# a since-removed tailnet device. Closing password auth globally locks the
+# phone out of both home servers, which is how a security improvement becomes
+# an outage.
+#
+# Port 22 is ufw-open to Anywhere, so this still removes password auth from
+# the LAN and from anything reaching the box from outside -- which is where
+# the actual brute-force risk lives. Verified per-address with
+# `sshd -T -C addr=...`: yes on 100.x, no on LAN, no on public.
+#
+# Delete this block once the phone has a key. Match MUST be last: every
+# directive after it applies only to the matched connections.
+Match Address 100.64.0.0/10
+    PasswordAuthentication yes
 EOF
 
     case "$DISTRO_FAMILY" in
