@@ -394,7 +394,13 @@ jobs:
         if: always() && steps.deploy.outcome == 'success'
         uses: nuniesmith/actions/.github/actions/health-check@main
         with:
-          containers: nginx photoprism nextcloud homeassistant audiobookshelf authentik-server uptime-kuma
+          # Every name here must be a container that actually exists AND
+          # declares a healthcheck, or the gate can never pass. This list had
+          # drifted to include `nginx` (freddy runs none -- princess is the
+          # only proxy) and `authentik-server` (removed), so it reported 5/7
+          # on a completely healthy stack and, with fail-on-unhealthy now
+          # true, blocked every deploy.
+          containers: photoprism nextcloud nextcloud-postgres homeassistant audiobookshelf shelfmark-api shelfmark-worker uptime-kuma
           ssh-host: ${{ secrets.FREDDY_TAILSCALE_IP }}
           ssh-port: ${{ secrets.SSH_PORT || '22' }}
           ssh-user: ${{ secrets.SSH_USER || 'actions' }}
