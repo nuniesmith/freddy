@@ -37,12 +37,9 @@ volumes:
             type: none
             o: bind
             device: /mnt/1tb/photoprism/storage
-    photoprism_postgres_data:
-        driver: local
-        driver_opts:
-            type: none
-            o: bind
-            device: /mnt/1tb/photoprism/postgres
+    # photoprism_postgres_data intentionally removed: PhotoPrism has no
+    # PostgreSQL driver, so nothing can ever populate it. The directory
+    # /mnt/1tb/photoprism/postgres is left in place on disk.
     # Cloud Storage volumes
     nextcloud_html:
         driver: local
@@ -241,7 +238,13 @@ services:
 
     # authentik server (web UI + API)
     authentik-server:
-        image: ghcr.io/goauthentik/server:latest
+        # Pinned: goauthentik/server publishes NO `latest` tag, so
+        # `:latest` returns "manifest unknown". Because the deploy runs
+        # `docker compose up -d --pull always`, that one 404 aborted the
+        # pull for EVERY service and the whole stack came up empty.
+        # 2025.2.4 is the version already running on freddy -- pinning it
+        # changes no behaviour, it just makes the reference resolvable.
+        image: ghcr.io/goauthentik/server:${AUTHENTIK_VERSION:-2025.2.4}
         container_name: authentik-server
         command: server
         environment:
@@ -285,7 +288,8 @@ services:
 
     # authentik worker (background tasks, LDAP outposts, etc.)
     authentik-worker:
-        image: ghcr.io/goauthentik/server:latest
+        # Same pin as authentik-server above; must stay in lockstep with it.
+        image: ghcr.io/goauthentik/server:${AUTHENTIK_VERSION:-2025.2.4}
         container_name: authentik-worker
         command: worker
         environment:
@@ -368,11 +372,13 @@ services:
         environment:
             PHOTOPRISM_ADMIN_PASSWORD: ${PHOTOPRISM_ADMIN_PASSWORD:-pleasechange}
             PHOTOPRISM_SITE_URL: http://localhost:2342/
-            PHOTOPRISM_DATABASE_DRIVER: postgres
-            PHOTOPRISM_DATABASE_SERVER: photoprism-postgres:5432
-            PHOTOPRISM_DATABASE_NAME: ${PHOTOPRISM_DB_NAME:-photoprism}
-            PHOTOPRISM_DATABASE_USER: ${PHOTOPRISM_DB_USER:-photoprism}
-            PHOTOPRISM_DATABASE_PASSWORD: ${PHOTOPRISM_DB_PASSWORD}
+            # PhotoPrism supports SQLite and MariaDB/MySQL ONLY. It has no
+            # PostgreSQL driver: with DRIVER=postgres it logs
+            #   "config: support for PostgreSQL is not yet available in this version"
+            # and then loops forever on "waiting for the database to become
+            # available". It never starts its web server. See PR for details.
+            # SQLite keeps the existing /photoprism/storage/index.db index.
+            PHOTOPRISM_DATABASE_DRIVER: sqlite
             PHOTOPRISM_UID: ${PUID:-1001}
             PHOTOPRISM_GID: ${PGID:-1001}
             TZ: ${TZ:-America/Toronto}
@@ -383,13 +389,19 @@ services:
             - "2342:2342"
         restart: unless-stopped
         logging: *default-logging
-        depends_on:
-            photoprism-postgres:
-                condition: service_healthy
         networks:
             - freddy
         healthcheck:
-            test: ["CMD", "photoprism", "status"]
+            # Do NOT use `photoprism status`: it prints "cannot connect to
+            # 0.0.0.0:2342" and still exits 0, so Docker reported this
+            # container "healthy" for ~4 weeks while it served nothing.
+            # Assert the positive capability instead -- the API only answers
+            # once the database is open and the web server is actually up.
+            test:
+                [
+                    "CMD-SHELL",
+                    "curl -fsS --max-time 5 http://localhost:2342/api/v1/status | grep -q operational",
+                ]
             <<: *healthcheck-defaults
             start_period: 60s
         deploy:
@@ -397,37 +409,13 @@ services:
                 limits:
                     memory: 2G
 
-    # postgres database for photoprism
-    photoprism-postgres:
-        image: postgres:16-alpine
-        container_name: photoprism-postgres
-        environment:
-            POSTGRES_DB: ${PHOTOPRISM_DB_NAME:-photoprism}
-            POSTGRES_USER: ${PHOTOPRISM_DB_USER:-photoprism}
-            POSTGRES_PASSWORD: ${PHOTOPRISM_DB_PASSWORD}
-            TZ: ${TZ:-America/Toronto}
-        volumes:
-            - photoprism_postgres_data:/var/lib/postgresql/data
-        restart: unless-stopped
-        logging: *default-logging
-        networks:
-            - freddy
-        healthcheck:
-            test:
-                [
-                    "CMD",
-                    "pg_isready",
-                    "-U",
-                    "${PHOTOPRISM_DB_USER:-photoprism}",
-                    "-d",
-                    "${PHOTOPRISM_DB_NAME:-photoprism}",
-                ]
-            <<: *healthcheck-defaults
-            start_period: 30s
-        deploy:
-            resources:
-                limits:
-                    memory: 512M
+    # NOTE: there is deliberately no `photoprism-postgres` service here.
+    # PhotoPrism cannot talk to PostgreSQL (see the comment on the photoprism
+    # service above), so a Postgres sidecar for it can only ever sit empty and
+    # mislead. If PhotoPrism ever ships a real PostgreSQL driver, add it back
+    # then. Its old data directory (/mnt/1tb/photoprism/postgres) and the
+    # docker volume freddy_photoprism_postgres_data are left on disk
+    # untouched; they contain no tables.
 
     # =============================================================================
     # CLOUD STORAGE
