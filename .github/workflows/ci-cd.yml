@@ -402,7 +402,22 @@ jobs:
           initial-delay: 30
           retry-count: 3
           retry-delay: 10
-          fail-on-unhealthy: false
+          # Assert the positive capability, not just "a container exists".
+          # PhotoPrism must serve an operational API AND report a non-empty
+          # library -- the exact thing that was silently false for ~4 weeks.
+          custom-command: |
+            set -e
+            status=$(docker exec photoprism curl -fsS --max-time 10 http://localhost:2342/api/v1/status)
+            echo "photoprism /api/v1/status -> $status"
+            echo "$status" | grep -q operational
+            photos=$(docker exec photoprism sqlite3 /photoprism/storage/index.db \
+              "select count(*) from photos where deleted_at is null;")
+            echo "photoprism library photo count -> $photos"
+            [ "$photos" -gt 0 ]
+          # A deploy that leaves containers unhealthy must FAIL. Previously
+          # this was false, so a run where all 7 containers failed their
+          # health check still reported "success".
+          fail-on-unhealthy: true
 
       # ======================================================================
       # DISCORD NOTIFICATION (Optional)
