@@ -20,6 +20,9 @@ on:
       - "**.md"
       - "docs/**"
       - ".gitignore"
+      # Changing the per-service updater is not a reason to stop and recreate
+      # every container in the house. Merging it did exactly that once.
+      - ".github/workflows/update-service.yml"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -342,6 +345,19 @@ jobs:
                 && echo '  ✅ Nextcloud full reset complete (will reinitialize on next start)'"
             fi
 
+            # Every image must be in hand BEFORE anything stops. On 2026-09-25 a
+            # single `denied` from ghcr.io (a stale registry login another deploy
+            # had left in this account) aborted `up --pull always` AFTER the stack
+            # was already down, and freddy sat empty for 17 minutes while this
+            # workflow printed success. Pulling here fails the deploy with the
+            # house still running.
+            echo "📥 Pulling every image before stopping anything..."
+            if ! ( cd "$HOME/${{ env.PROJECT_PATH }}" && docker compose pull --quiet ); then
+              echo "❌ Image pull failed -- the running stack was left untouched"
+              exit 1
+            fi
+            echo "✅ All images pulled"
+
             # Stop existing services to release file locks
             echo "🛑 Stopping existing services..."
             if [ -d "$HOME/${{ env.PROJECT_PATH }}" ]; then
@@ -357,6 +373,10 @@ jobs:
             fi
 
           deploy-command: |
+            # Without -e a failed `up` fell through to "✅ Deployment complete",
+            # which is how an empty host reported success.
+            set -euo pipefail
+
             # Action already cd's to PROJECT_PATH; use absolute path as safeguard
             cd $HOME/${{ env.PROJECT_PATH }}
 
@@ -364,17 +384,20 @@ jobs:
             echo "🐳 Stopping existing services..."
             docker compose down --remove-orphans 2>/dev/null || true
 
-            # Remove stale audiobookshelf volumes (created with bad paths before fix)
+            # Remove stale audiobookshelf volumes (created with bad paths before fix).
+            # These are bind-backed (/mnt/1tb/...): removing the definition leaves
+            # the library, config and metadata on disk, and `up` recreates it.
             echo "🧹 Removing stale audiobookshelf volumes (if any)..."
             docker volume rm freddy_audiobookshelf_data freddy_audiobookshelf_config freddy_audiobookshelf_metadata 2>/dev/null || true
 
-            # Build nginx image (uses cache — only rebuilds if Dockerfile/config changed)
-            echo "🔨 Building nginx image..."
-            docker compose build nginx
+            # No nginx build: freddy runs no nginx (princess is the only proxy),
+            # so `docker compose build nginx` failed on every deploy -- silently,
+            # until -e above would have made it fail the deploy.
 
-            # Pull latest images and start all services in one pass
-            echo "🚀 Pulling images & starting all services..."
-            docker compose up -d --pull always --force-recreate --remove-orphans
+            # Images were pulled before anything stopped, so this does not touch
+            # the registry: a registry hiccup can no longer strand an empty host.
+            echo "🚀 Starting all services..."
+            docker compose up -d --force-recreate --remove-orphans
 
             echo "✅ Deployment complete"
 
