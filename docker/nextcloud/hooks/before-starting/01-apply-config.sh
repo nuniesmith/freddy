@@ -12,14 +12,14 @@
 #   they always take effect regardless of what the base entrypoint did.
 #
 # Permission handling:
-#   Depending on the Nextcloud image version and whether this is a fresh
-#   install or an existing one, this hook may run as root OR as www-data.
-#   We detect the current user and use the appropriate copy strategy:
-#     - root:     cp + chown
-#     - www-data: try cp, fall back to sudo cp if the target file is
-#                 owned by root from a previous run
-#   The Dockerfile installs sudo with NOPASSWD for www-data, so the
-#   fallback always works.
+#   Older images ran this hook as root; since 32.0.x the official entrypoint
+#   runs hooks as www-data. As root it copies and chowns. As www-data every
+#   file it copies is already www-data's, so there is nothing to chown -- and
+#   it must NEVER reach for sudo: freddy's Docker daemon sets
+#   no-new-privileges for every container, which makes sudo fail outright.
+#   On 2026-09-25 the 32.0.6 -> 32.0.15 rebuild hit exactly that fallback,
+#   the hook exited 1 on every start, and Nextcloud crash-looped. A copy the
+#   non-root path cannot make fails loudly instead of trying to escalate.
 #
 # Source: /usr/src/nextcloud-custom-config/*.config.php  (baked into image)
 # Target: /var/www/html/config/                          (live config dir)
@@ -42,8 +42,7 @@ echo "  ℹ️  Running as: ${CURRENT_USER} (UID ${CURRENT_UID})"
 if [ "${CURRENT_UID}" -eq 0 ]; then
     mkdir -p "$CONFIG_DST"
 else
-    # As www-data, try mkdir; fall back to sudo
-    mkdir -p "$CONFIG_DST" 2>/dev/null || sudo mkdir -p "$CONFIG_DST"
+    mkdir -p "$CONFIG_DST"
 fi
 
 # copy_file src dst — copy a single file, handling permission issues
@@ -55,15 +54,12 @@ copy_file() {
         # Running as root — straightforward copy
         cp -f "$src" "$dst"
     else
-        # Running as www-data — try direct copy first
-        if cp -f "$src" "$dst" 2>/dev/null; then
-            : # success
-        else
-            # Direct copy failed (target likely owned by root from a prior run).
-            # Use sudo to overwrite, then fix ownership so future runs work
-            # without sudo.
-            sudo cp -f "$src" "$dst"
-            sudo chown www-data:www-data "$dst"
+        # Running as www-data. A refusal here means the target belongs to
+        # root from an old root-run hook: say so, rather than escalating.
+        if ! cp -f "$src" "$dst"; then
+            echo "  ❌ cannot write $dst as $(id -un); fix its ownership from the host:" >&2
+            echo "     docker exec -u 0 nextcloud chown www-data:www-data $dst" >&2
+            exit 1
         fi
     fi
 }
@@ -75,9 +71,9 @@ fix_permissions() {
         chmod 770 "$CONFIG_DST"
         chmod 660 "$CONFIG_DST"/*.config.php 2>/dev/null || true
     else
-        sudo chown -R www-data:www-data "$CONFIG_DST"
-        sudo chmod 770 "$CONFIG_DST"
-        sudo chmod 660 "$CONFIG_DST"/*.config.php 2>/dev/null || true
+        # Already www-data's (it just wrote them); tighten modes where it can.
+        chmod 770 "$CONFIG_DST" 2>/dev/null || true
+        chmod 660 "$CONFIG_DST"/*.config.php 2>/dev/null || true
     fi
 }
 
