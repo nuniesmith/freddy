@@ -40,6 +40,10 @@ on:
         description: "Refresh container images"
         type: boolean
         default: true
+      allow_major:
+        description: "Allow a MAJOR upgrade for these (e.g. nextcloud nextcloud-cron after bumping its Dockerfile); watch the run"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -82,4 +86,8 @@ jobs:
           # into a dead one: a failure is reported, not reverted.
           rebuild-services: nextcloud nextcloud-cron
           no-rollback-services: nextcloud nextcloud-cron
+          # Those only take same-major updates on their own. To go 32 -> 33: bump
+          # the FROM line, merge, then run this by hand with
+          # allow_major: "nextcloud nextcloud-cron" and watch it.
+          allow-major-services: ${{ inputs.allow_major }}
           discord-webhook: ${{ secrets.DISCORD_WEBHOOK_ACTIONS }}
