@@ -1,0 +1,93 @@
+# ============================================================================
+# Daily maintenance for freddy: apt packages and container images
+# ============================================================================
+# Every morning, after the nightly backup has finished:
+#   1. apt update + upgrade, through homelab-apt-upgrade on freddy. Never
+#      reboots; the report says when a reboot is needed.
+#   2. pulls newer images for the third-party services, rebuilds Nextcloud on
+#      a fresh base, recreates only what changed, and proves each one healthy
+#      -- rolling back what is not.
+#   3. posts to Discord when something changed or went wrong, and stays quiet
+#      on a morning with nothing to do.
+#
+# The logic is in nuniesmith/actions (host-update) and, for apt, nuniesmith/
+# scripts (src/updates). shelfmark is left alone: its own CI rolls it out at an
+# exact revision (update-service.yml). LifeOS is a separate compose project
+# with its own pipeline, and is not touched either.
+#
+# ONE-TIME SETUP on freddy, for the apt half (installs the helper and the one
+# sudo rule that lets `actions` run it):
+#     sudo ./src/updates/install.sh      # in a checkout of nuniesmith/scripts
+# ============================================================================
+name: 🌅 Freddy Daily Update
+
+on:
+  schedule:
+    # 10:23 UTC = 06:23 Toronto in summer, 05:23 in winter: after freddy's
+    # nightly backup (03:30 local) is done, so an update that goes wrong has a
+    # fresh restore point behind it. Sullivan runs more than an hour later:
+    # both hosts share one public IP, and Docker Hub's anonymous pull limit is
+    # counted per IP per hour. Off the hour, because GitHub delays
+    # top-of-the-hour schedules the most.
+    - cron: "23 10 * * *"
+  workflow_dispatch:
+    inputs:
+      apt:
+        description: "Upgrade apt packages"
+        type: boolean
+        default: true
+      docker:
+        description: "Refresh container images"
+        type: boolean
+        default: true
+      allow_major:
+        description: "Allow a MAJOR upgrade for these (e.g. nextcloud nextcloud-cron after bumping its Dockerfile); watch the run"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: write # to wait for deploys in progress, and to keep this schedule alive
+
+# Never cancelled: stopping halfway through a recreate leaves a service split
+# across two images.
+concurrency:
+  group: freddy-daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: 🌅 Update freddy
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: 🔌 Connect to Tailscale
+        uses: nuniesmith/actions/.github/actions/tailscale-connect@main
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          target-ip: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          target-ssh-port: ${{ secrets.SSH_PORT || '22' }}
+
+      - name: 🌅 Update
+        uses: nuniesmith/actions/.github/actions/host-update@main
+        with:
+          host-name: freddy
+          host: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          ssh-key: ${{ secrets.SSH_KEY }}
+          ssh-user: ${{ secrets.SSH_USER || 'actions' }}
+          ssh-port: ${{ secrets.SSH_PORT || '22' }}
+          project-path: freddy
+          apt: ${{ github.event_name == 'schedule' || inputs.apt }}
+          docker: ${{ github.event_name == 'schedule' || inputs.docker }}
+          # Built here from docker/nextcloud/Dockerfile, which pins the major
+          # version. Nextcloud upgrades its database on start and its old image
+          # then refuses to run, so rolling back would turn a broken Nextcloud
+          # into a dead one: a failure is reported, not reverted.
+          rebuild-services: nextcloud nextcloud-cron
+          no-rollback-services: nextcloud nextcloud-cron
+          # Those only take same-major updates on their own. To go 32 -> 33: bump
+          # the FROM line, merge, then run this by hand with
+          # allow_major: "nextcloud nextcloud-cron" and watch it.
+          allow-major-services: ${{ inputs.allow_major }}
+          discord-webhook: ${{ secrets.DISCORD_WEBHOOK_ACTIONS }}

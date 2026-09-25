@@ -23,6 +23,7 @@ on:
       # Changing the per-service updater is not a reason to stop and recreate
       # every container in the house. Merging it did exactly that once.
       - ".github/workflows/update-service.yml"
+      - ".github/workflows/daily-update.yml"
   pull_request:
     branches: [main]
   workflow_dispatch:
