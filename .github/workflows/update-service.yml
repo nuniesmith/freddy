@@ -1,0 +1,204 @@
+# ============================================================================
+# Roll out a new image for one of freddy's own services -- and nothing else
+# ============================================================================
+# A full freddy deploy (ci-cd.yml) stops and force-recreates every container in
+# the house. That is right when freddy's own stack changes, and far too big a
+# hammer when only shelfmark published a new image -- which is why a shelfmark
+# merge used to reach freddy only on the next, unrelated freddy deploy.
+#
+# This pulls the EXACT commit that was published, recreates only the services
+# named, and then proves the running containers are that commit. A green run on
+# its own has claimed success over dead services here before.
+#
+# A service repo's CI calls it after pushing its image, e.g. shelfmark:
+#
+#   gh workflow run update-service.yml -R nuniesmith/freddy \
+#     -f image=ghcr.io/nuniesmith/shelfmark -f revision=<40-char sha> \
+#     -f services="shelfmark-api shelfmark-worker shelfmark-bot"
+#
+# The caller needs a token with Actions: write on THIS repository (a
+# fine-grained PAT scoped to nuniesmith/freddy alone); GITHUB_TOKEN cannot start
+# a workflow in another repository.
+#
+# To auto-update another service: add its image and compose services to
+# ALLOWED below, and the same call to that repository's CI.
+# ============================================================================
+name: 🔄 Freddy Service Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Image repository, e.g. ghcr.io/nuniesmith/shelfmark"
+        required: true
+        type: string
+      revision:
+        description: "Full commit SHA whose image tag was just pushed"
+        required: true
+        type: string
+      services:
+        description: "Space-separated compose services to recreate"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialised and never cancelled: a recreate interrupted halfway leaves a
+# service split across two images. When several are queued GitHub keeps only
+# the newest pending run, so a burst of merges settles on the last one.
+concurrency:
+  group: freddy-service-update
+  cancel-in-progress: false
+
+env:
+  PROJECT_PATH: freddy
+
+jobs:
+  update:
+    name: 🔄 ${{ inputs.services }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # These values are spliced into a shell on freddy, so they are checked
+      # against an allowlist rather than escaped. Anything not listed here is
+      # refused, not guessed at.
+      - name: 🔒 Validate the request
+        id: request
+        env:
+          IMAGE: ${{ inputs.image }}
+          REVISION: ${{ inputs.revision }}
+          SERVICES: ${{ inputs.services }}
+        run: |
+          declare -A ALLOWED=(
+            [ghcr.io/nuniesmith/shelfmark]="shelfmark-api shelfmark-worker shelfmark-bot"
+          )
+          # Only containers that declare a healthcheck can be health-gated; the
+          # bot has none and is covered by the running-image check instead.
+          declare -A HAS_HEALTHCHECK=([shelfmark-api]=1 [shelfmark-worker]=1)
+
+          allowed="${ALLOWED[$IMAGE]:-}"
+          if [ -z "$allowed" ]; then
+            echo "::error::$IMAGE is not an image freddy auto-updates"; exit 1
+          fi
+          if ! [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::revision must be a full 40-character commit SHA"; exit 1
+          fi
+          if [ -z "${SERVICES// /}" ]; then
+            echo "::error::no services named"; exit 1
+          fi
+          health=""
+          for s in $SERVICES; do
+            if [[ " $allowed " != *" $s "* ]]; then
+              echo "::error::$s does not run $IMAGE on freddy"; exit 1
+            fi
+            [ -n "${HAS_HEALTHCHECK[$s]:-}" ] && health="$health $s"
+          done
+          {
+            echo "image=$IMAGE"
+            echo "revision=$REVISION"
+            echo "services=$(echo $SERVICES)"
+            echo "health=$(echo $health)"
+          } >> "$GITHUB_OUTPUT"
+          echo "✅ $IMAGE@${REVISION:0:7} -> $SERVICES"
+
+      - name: 🔌 Connect to Tailscale
+        id: tailscale
+        uses: nuniesmith/actions/.github/actions/tailscale-connect@main
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          target-ip: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          target-ssh-port: ${{ secrets.SSH_PORT || '22' }}
+
+      - name: 🚀 Recreate only the named services
+        id: deploy
+        if: steps.tailscale.outputs.connected == 'true'
+        uses: nuniesmith/actions/.github/actions/ssh-deploy@main
+        with:
+          host: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USER || 'actions' }}
+          ssh-key: ${{ secrets.SSH_KEY }}
+          project-path: ${{ env.PROJECT_PATH }}
+          git-pull: false
+          docker-prune: false
+          # The deploy-command below is the whole job; nothing builds on the box.
+          build-strategy: none
+          deploy-command: |
+            set -euo pipefail
+            cd "$HOME/${{ env.PROJECT_PATH }}"
+            IMAGE='${{ steps.request.outputs.image }}'
+            REVISION='${{ steps.request.outputs.revision }}'
+            SERVICES='${{ steps.request.outputs.services }}'
+
+            # Pull the commit, not `latest`: `latest` may already have moved on
+            # to a newer push, and "whatever latest is now" cannot be checked
+            # against anything. Compose tracks `latest`, so the exact revision
+            # is tagged as it locally; the next full deploy re-pulls the
+            # registry's `latest` and converges.
+            docker pull "$IMAGE:$REVISION"
+            docker tag "$IMAGE:$REVISION" "$IMAGE:latest"
+            want=$(docker image inspect -f '{{.Id}}' "$IMAGE:$REVISION")
+
+            echo "🔄 Recreating: $SERVICES"
+            docker compose up -d --no-deps $SERVICES
+
+            # The claim is "freddy now runs $REVISION", so check exactly that,
+            # per container: the image id AND the commit baked into the image.
+            for s in $SERVICES; do
+              got=$(docker inspect -f '{{.Image}}' "$s")
+              rev=$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$s")
+              if [ "$got" != "$want" ] || [ "$rev" != "$REVISION" ]; then
+                echo "❌ $s runs ${rev:-<no revision label>} ($got), not $REVISION ($want)"
+                exit 1
+              fi
+              echo "✅ $s runs ${REVISION:0:7}"
+            done
+
+      - name: 🏥 Health
+        id: health
+        if: steps.deploy.outcome == 'success'
+        uses: nuniesmith/actions/.github/actions/health-check@main
+        with:
+          containers: ${{ steps.request.outputs.health }}
+          ssh-host: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          ssh-port: ${{ secrets.SSH_PORT || '22' }}
+          ssh-user: ${{ secrets.SSH_USER || 'actions' }}
+          ssh-key: ${{ secrets.SSH_KEY }}
+          initial-delay: 20
+          retry-count: 4
+          retry-delay: 10
+          # Healthy is not the same as serving. /readyz fails when the worker is
+          # stale or a media root is missing, and a container that crashed and
+          # came back has already failed once since the recreate.
+          custom-command: |
+            set -e
+            for s in ${{ steps.request.outputs.services }}; do
+              restarts=$(docker inspect -f '{{.RestartCount}}' "$s")
+              running=$(docker inspect -f '{{.State.Running}}' "$s")
+              echo "$s running=$running restarts=$restarts"
+              # An explicit exit, not `[ a ] && [ b ]`: under set -e only the
+              # LAST command of an && list can end the script, so a stopped
+              # container would have failed the first test and passed anyway.
+              if [ "$running" != "true" ] || [ "$restarts" != "0" ]; then
+                echo "❌ $s is not running cleanly since the recreate"; exit 1
+              fi
+            done
+            case " ${{ steps.request.outputs.services }} " in
+              *" shelfmark-api "*)
+                docker exec shelfmark-api python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/readyz',timeout=5).read().decode())"
+                ;;
+            esac
+          fail-on-unhealthy: true
+
+      - name: 📣 Notify
+        if: always() && steps.request.outcome == 'success'
+        uses: nuniesmith/actions/.github/actions/discord-notify@main
+        continue-on-error: true
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_ACTIONS }}
+          title: "🔄 Freddy service update"
+          description: "${{ steps.request.outputs.services }} -> ${{ inputs.image }}@${{ inputs.revision }}"
+          status: ${{ (steps.deploy.outcome == 'success' && steps.health.outcome == 'success') && 'success' || 'failure' }}
+          include-repo-info: true
