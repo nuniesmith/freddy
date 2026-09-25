@@ -1,7 +1,15 @@
 # =============================================================================
 # Freddy Nextcloud Production Dockerfile
 # =============================================================================
-# Custom Nextcloud image built on the official nextcloud:stable-apache base.
+# Custom Nextcloud image built on the official nextcloud:32-apache base.
+#
+# PINNED TO A MAJOR VERSION, deliberately. `stable` moves to each new major,
+# and Nextcloud can only upgrade ONE major at a time: its entrypoint refuses to
+# start on a data directory two majors behind. In September 2026 freddy ran
+# 32.0.6 while `stable` was already 34.0.4, so any rebuild from `stable` would
+# have left Nextcloud down. The daily update rebuilds this image, which brings
+# in 32.0.x patches only; a major upgrade is a one-line PR here, 32 -> 33 then
+# 33 -> 34, each deployed and checked before the next.
 #
 # Two-stage build:
 #   1. Builder  – copies config files and validates PHP syntax
@@ -23,7 +31,7 @@
 # =============================================================================
 # Stage 1: Builder – validate configuration files
 # =============================================================================
-FROM nextcloud:stable-apache AS builder
+FROM nextcloud:32-apache AS builder
 
 # Copy custom Nextcloud config overrides for validation
 COPY services/nextcloud/config/ /tmp/nextcloud-config/
@@ -39,7 +47,7 @@ RUN set -e; \
 # =============================================================================
 # Stage 2: Production image
 # =============================================================================
-FROM nextcloud:stable-apache AS production
+FROM nextcloud:32-apache AS production
 
 LABEL maintainer="nuniesmith"
 LABEL description="Freddy Nextcloud – custom image with baked-in config"

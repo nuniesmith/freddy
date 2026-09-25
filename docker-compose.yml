@@ -160,7 +160,11 @@ services:
 
     # uptime kuma - service monitoring dashboard
     uptime-kuma:
-        image: louislam/uptime-kuma:latest
+        # The 1.x line, not `latest`: 2.x migrates the database one way, and the
+        # uptime-kuma-api client that provision_kuma.py (sullivan repo) uses to
+        # manage the monitors speaks 1.x only. Move to 2 deliberately, not on
+        # some morning's daily update.
+        image: louislam/uptime-kuma:1
         container_name: uptime-kuma
         environment:
             TZ: ${TZ:-America/Toronto}
