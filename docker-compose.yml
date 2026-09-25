@@ -471,6 +471,12 @@ services:
             SULLIVAN_SSH_IDENTITY_FILE: /run/secrets/id_ed25519
             SULLIVAN_COMPLETED_ROOT: ${SULLIVAN_COMPLETED_ROOT:-/}
             SHELFMARK_API_TOKEN: ${SHELFMARK_API_TOKEN:-}
+            # An ebook over Discord's 10 MB attachment limit gets a download
+            # link on this address instead (shelfmark#39); princess already
+            # forwards all of shelfmark.7gram.xyz to this API. *.7gram.xyz only
+            # opens on the tailnet, hence the note posted with every link.
+            SHELFMARK_PUBLIC_URL: ${SHELFMARK_PUBLIC_URL:-https://shelfmark.7gram.xyz}
+            SHELFMARK_DOWNLOAD_LINK_NOTE: ${SHELFMARK_DOWNLOAD_LINK_NOTE:-It opens only with Tailscale switched on.}
             AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
             AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
             AUDIOBOOKSHELF_LIBRARY_ID: ${AUDIOBOOKSHELF_LIBRARY_ID:-}
