@@ -253,13 +253,17 @@ jobs:
             upsert_env DISCORD_BOT_TOKEN "${{ secrets.DISCORD_BOT_TOKEN }}"
             upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
             upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
+            # discordarr's movie, show and music requests go straight to these.
+            upsert_env RADARR_API_KEY "${{ secrets.RADARR_API_KEY }}"
+            upsert_env SONARR_API_KEY "${{ secrets.SONARR_API_KEY }}"
+            upsert_env LIDARR_API_KEY "${{ secrets.LIDARR_API_KEY }}"
             # The WORKER posts pipeline results here, not the bot — a download
             # that finishes long after the Discord interaction expired has no
             # interaction left to reply to. Without this the whole unattended
             # pipeline reports success and failure into a job row nobody reads.
             upsert_env SHELFMARK_DISCORD_WEBHOOK_URL "${{ secrets.SHELFMARK_DISCORD_WEBHOOK_URL }}"
 
-            # `shelfmark-bot` is the only service behind a Compose profile
+            # `discordarr` is the only service behind a Compose profile
             # (`discord`), and `docker compose up -d` SKIPS profiled services
             # in silence — no error, no container, nothing in the deploy log to
             # notice. Setting the token and getting no bot, with no failure
@@ -269,7 +273,7 @@ jobs:
             # to the token means setting the secret is all that is needed.
             if [ -n "${{ secrets.DISCORD_BOT_TOKEN }}" ]; then
               upsert_env COMPOSE_PROFILES "discord"
-              echo "  ✓ discord profile active — shelfmark-bot will start"
+              echo "  ✓ discord profile active — discordarr will start"
             else
               # Drop the key rather than writing an empty one: an empty
               # COMPOSE_PROFILES is a valid "no profiles" setting, but leaving
