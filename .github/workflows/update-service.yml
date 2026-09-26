@@ -74,9 +74,11 @@ jobs:
             [ghcr.io/nuniesmith/shelfmark]="shelfmark-api shelfmark-worker"
             [ghcr.io/nuniesmith/discordarr]="discordarr"
           )
-          # Only containers that declare a healthcheck can be health-gated; the
-          # bot has none and is covered by the running-image check instead.
-          declare -A HAS_HEALTHCHECK=([shelfmark-api]=1 [shelfmark-worker]=1)
+          # Only containers that declare a healthcheck can be health-gated.
+          # discordarr's is a heartbeat the bot writes only while it is logged
+          # in to Discord (discordarr#2), so a bot that cannot connect fails
+          # the rollout instead of passing as merely "running".
+          declare -A HAS_HEALTHCHECK=([shelfmark-api]=1 [shelfmark-worker]=1 [discordarr]=1)
 
           allowed="${ALLOWED[$IMAGE]:-}"
           if [ -z "$allowed" ]; then

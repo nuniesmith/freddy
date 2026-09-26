@@ -433,8 +433,10 @@ jobs:
           # drifted to include `nginx` (freddy runs none -- princess is the
           # only proxy) and `authentik-server` (removed), so it reported 5/7
           # on a completely healthy stack and, with fail-on-unhealthy now
-          # true, blocked every deploy.
-          containers: photoprism nextcloud nextcloud-postgres homeassistant audiobookshelf shelfmark-api shelfmark-worker uptime-kuma
+          # true, blocked every deploy. discordarr exists only while the
+          # `discord` profile is active, which is exactly when the token is
+          # set (see "discord profile" above), so it is gated on the same test.
+          containers: photoprism nextcloud nextcloud-postgres homeassistant audiobookshelf shelfmark-api shelfmark-worker uptime-kuma ${{ secrets.DISCORD_BOT_TOKEN != '' && 'discordarr' || '' }}
           ssh-host: ${{ secrets.FREDDY_TAILSCALE_IP }}
           ssh-port: ${{ secrets.SSH_PORT || '22' }}
           ssh-user: ${{ secrets.SSH_USER || 'actions' }}
