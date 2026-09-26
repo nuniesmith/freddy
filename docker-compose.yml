@@ -569,14 +569,20 @@ services:
                 limits:
                     memory: 512M
 
+    # discordarr (nuniesmith/discordarr): the household's ONE Discord bot. It
+    # took over shelfmark-bot's token and carries its book commands unchanged,
+    # talking to shelfmark-api exactly as that bot did, and adds /movie, /show,
+    # /music and /queue, which go straight to Radarr, Sonarr and Lidarr on
+    # sullivan over the tailnet. One token cannot drive two bots -- each would
+    # overwrite the other's slash commands -- so shelfmark-bot is gone, not
+    # merely stopped.
+    #
     # Held behind a profile: the bot exits immediately without DISCORD_BOT_TOKEN,
-    # and `restart: unless-stopped` would turn that into a crash loop. Start it
-    # with `docker compose --profile discord up -d shelfmark-bot` once the token
-    # and SHELFMARK_API_TOKEN are in .env.
-    shelfmark-bot:
-        image: ghcr.io/nuniesmith/shelfmark:latest
-        container_name: shelfmark-bot
-        command: ["shelfmark-bot"]
+    # and `restart: unless-stopped` would turn that into a crash loop. The
+    # deploy turns the profile on whenever that secret is set (see ci-cd.yml).
+    discordarr:
+        image: ghcr.io/nuniesmith/discordarr:latest
+        container_name: discordarr
         profiles:
             - discord
         environment:
@@ -586,6 +592,12 @@ services:
             DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
             SHELFMARK_DISCORD_GUILD_ID: ${SHELFMARK_DISCORD_GUILD_ID:-}
             SHELFMARK_DISCORD_ALLOWED_ROLE_IDS: ${SHELFMARK_DISCORD_ALLOWED_ROLE_IDS:-}
+            RADARR_URL: ${RADARR_URL:-http://100.87.125.19:7878}
+            RADARR_API_KEY: ${RADARR_API_KEY:-}
+            SONARR_URL: ${SONARR_URL:-http://100.87.125.19:8989}
+            SONARR_API_KEY: ${SONARR_API_KEY:-}
+            LIDARR_URL: ${LIDARR_URL:-http://100.87.125.19:8686}
+            LIDARR_API_KEY: ${LIDARR_API_KEY:-}
         depends_on:
             shelfmark-api:
                 condition: service_healthy

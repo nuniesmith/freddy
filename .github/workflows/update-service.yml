@@ -14,7 +14,7 @@
 #
 #   gh workflow run update-service.yml -R nuniesmith/freddy \
 #     -f image=ghcr.io/nuniesmith/shelfmark -f revision=<40-char sha> \
-#     -f services="shelfmark-api shelfmark-worker shelfmark-bot"
+#     -f services="shelfmark-api shelfmark-worker"
 #
 # The caller needs a token with Actions: write on THIS repository (a
 # fine-grained PAT scoped to nuniesmith/freddy alone); GITHUB_TOKEN cannot start
@@ -71,7 +71,8 @@ jobs:
           SERVICES: ${{ inputs.services }}
         run: |
           declare -A ALLOWED=(
-            [ghcr.io/nuniesmith/shelfmark]="shelfmark-api shelfmark-worker shelfmark-bot"
+            [ghcr.io/nuniesmith/shelfmark]="shelfmark-api shelfmark-worker"
+            [ghcr.io/nuniesmith/discordarr]="discordarr"
           )
           # Only containers that declare a healthcheck can be health-gated; the
           # bot has none and is covered by the running-image check instead.
