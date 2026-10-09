@@ -705,3 +705,4 @@ services:
             resources:
                 limits:
                     memory: 64M
+
