@@ -258,15 +258,26 @@ jobs:
             upsert_env QBITTORRENT_PASSWORD "${{ secrets.QBITTORRENT_PASSWORD }}"
             upsert_env DISCORD_BOT_TOKEN "${{ secrets.DISCORD_BOT_TOKEN }}"
             # LifeOS (moved here from the lifeos repo — runs on freddy).
-            # IMAGE defaults to :main in the compose file; pin via secret to roll back.
+            # Secrets auto-generate if missing: DB creds default to lifeos/lifeos
+            # with a random password; DATABASE_URL is always constructed locally.
+            # Existing .env values are kept (so a generated password survives).
+            gen_pass() { openssl rand -base64 24 | tr -d "=+/" | cut -c1-24; }
+            get_or_gen() { # $1=key $2=secret_value $3=default
+              if [ -n "$2" ]; then echo "$2";
+              elif grep -q "^$1=..*" .env 2>/dev/null; then grep "^$1=" .env | cut -d= -f2-;
+              elif [ -n "$3" ]; then echo "$3";
+              else gen_pass; fi
+            }
             upsert_env LIFEOS_IMAGE "${{ secrets.LIFEOS_IMAGE }}"
-            upsert_env LIFEOS_ORIGIN "${{ secrets.LIFEOS_ORIGIN }}"
-            upsert_env POSTGRES_DB "${{ secrets.POSTGRES_DB }}"
-            upsert_env POSTGRES_USER "${{ secrets.POSTGRES_USER }}"
-            upsert_env POSTGRES_PASSWORD "${{ secrets.POSTGRES_PASSWORD }}"
-            upsert_env LIFEOS_DATABASE_URL "${{ secrets.LIFEOS_DATABASE_URL }}"
-            upsert_env LIFEOS_BIND_ADDR "${{ secrets.LIFEOS_BIND_ADDR }}"
-            upsert_env LIFEOS_BIND_PORT "${{ secrets.LIFEOS_BIND_PORT }}"
+            upsert_env LIFEOS_ORIGIN "$(get_or_gen LIFEOS_ORIGIN '${{ secrets.LIFEOS_ORIGIN }}' 'https://lifeos.7gram.xyz')"
+            upsert_env POSTGRES_DB "$(get_or_gen POSTGRES_DB '${{ secrets.POSTGRES_DB }}' 'lifeos')"
+            upsert_env POSTGRES_USER "$(get_or_gen POSTGRES_USER '${{ secrets.POSTGRES_USER }}' 'lifeos')"
+            upsert_env POSTGRES_PASSWORD "$(get_or_gen POSTGRES_PASSWORD '${{ secrets.POSTGRES_PASSWORD }}' '')"
+            # DATABASE_URL is always built from the parts — never a secret.
+            LIFEOS_DB_URL="postgresql://$(grep '^POSTGRES_USER=' .env | cut -d= -f2):$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2)@lifeos-db:5432/$(grep '^POSTGRES_DB=' .env | cut -d= -f2)?sslmode=disable"
+            upsert_env LIFEOS_DATABASE_URL "$LIFEOS_DB_URL"
+            upsert_env LIFEOS_BIND_ADDR "$(get_or_gen LIFEOS_BIND_ADDR '${{ secrets.LIFEOS_BIND_ADDR }}' '100.106.65.55')"
+            upsert_env LIFEOS_BIND_PORT "$(get_or_gen LIFEOS_BIND_PORT '${{ secrets.LIFEOS_BIND_PORT }}' '8140')" 
             upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
             upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
             # discordarr's movie, show and music requests go straight to these.
@@ -393,6 +404,13 @@ jobs:
               echo "🗄️ Running LifeOS migrations..."
               cd "$HOME/${{ env.PROJECT_PATH }}"
               docker compose up -d lifeos-db
+              # Sync the DB password to match .env (covers generated passwords
+              # on existing data — postgres only uses POSTGRES_PASSWORD at init).
+              echo "🔑 Syncing lifeos DB password..."
+              DB_USER=$(grep '^POSTGRES_USER=' .env | cut -d= -f2)
+              DB_PASS=$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2)
+              docker compose exec -T lifeos-db psql -U "$DB_USER" -d postgres \
+                -c "ALTER USER \"$DB_USER\" WITH PASSWORD '$DB_PASS';" 2>&1 | tail -1
               docker compose run --rm lifeos-app node scripts/migrate.mjs \
                 || { echo "❌ LifeOS migration failed — deploy stopped before the app restarted"; exit 1; }
               echo "✅ LifeOS migrations applied"

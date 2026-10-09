@@ -183,28 +183,18 @@ settings → Manage Actions access → Add repository → `nuniesmith/freddy`.
 ### LifeOS
 
 LifeOS moved here from the `nuniesmith/lifeos` repo (it runs on freddy).
-Copy the values from `/srv/lifeos/.env` on freddy — the database stays put,
-so the credentials must match what postgres already has.
+Secrets auto-generate if missing — you only need to set the ones you want to
+pin. `LIFEOS_DATABASE_URL` is always built locally from the DB parts.
 
-| Secret Name | Description | Example |
-|-------------|-------------|---------|
-| `LIFEOS_IMAGE` | App image tag (optional — defaults to `ghcr.io/nuniesmith/lifeos:main`) | `ghcr.io/nuniesmith/lifeos:main` |
-| `LIFEOS_ORIGIN` | Public origin (SvelteKit CSRF check) | `https://lifeos.7gram.xyz` |
+| Secret Name | Description | Default if missing |
+|-------------|-------------|-------------------|
 | `POSTGRES_DB` | Postgres database name | `lifeos` |
 | `POSTGRES_USER` | Postgres user | `lifeos` |
-| `POSTGRES_PASSWORD` | Postgres password | _(from /srv/lifeos/.env)_ |
-| `LIFEOS_DATABASE_URL` | App database URL | `postgresql://user:pass@lifeos-db:5432/lifeos?sslmode=disable` |
-| `LIFEOS_BIND_ADDR` | Tailscale address nginx binds on (optional) | `100.106.65.55` |
-| `LIFEOS_BIND_PORT` | Port nginx binds on (optional) | `8140` |
-
-```bash
-# LifeOS (copy from /srv/lifeos/.env on freddy)
-gh secret set LIFEOS_ORIGIN --body "https://lifeos.7gram.xyz"
-gh secret set POSTGRES_DB --body "lifeos"
-gh secret set POSTGRES_USER --body "lifeos"
-gh secret set POSTGRES_PASSWORD --body "your-existing-password"
-gh secret set LIFEOS_DATABASE_URL --body "postgresql://lifeos:your-existing-password@lifeos-db:5432/lifeos?sslmode=disable"
-```
+| `POSTGRES_PASSWORD` | Postgres password (random if missing; synced to the DB via `ALTER USER`) | _(random)_ |
+| `LIFEOS_ORIGIN` | Public origin (SvelteKit CSRF check) | `https://lifeos.7gram.xyz` |
+| `LIFEOS_IMAGE` | App image tag (pin to roll back) | `ghcr.io/nuniesmith/lifeos:main` |
+| `LIFEOS_BIND_ADDR` | Tailscale address nginx binds on | `100.106.65.55` |
+| `LIFEOS_BIND_PORT` | Port nginx binds on | `8140` |
 
 ## Related Documentation
 
