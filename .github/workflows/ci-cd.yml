@@ -409,8 +409,11 @@ jobs:
               echo "🔑 Syncing lifeos DB password..."
               DB_USER=$(grep '^POSTGRES_USER=' .env | cut -d= -f2)
               DB_PASS=$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2)
-              docker compose exec -T lifeos-db psql -U "$DB_USER" -d postgres \
-                -c "ALTER USER \"$DB_USER\" WITH PASSWORD '$DB_PASS';" 2>&1 | tail -1
+              # Peer auth as the postgres OS user -> postgres DB superuser.
+              # Creates the role if the data dir predates it, then sets password.
+              docker compose exec -T --user postgres lifeos-db psql -U postgres -d postgres \
+                -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$DB_USER') THEN CREATE ROLE \"$DB_USER\" WITH LOGIN SUPERUSER; END IF; END \$\$;" \
+                -c "ALTER USER \"$DB_USER\" WITH PASSWORD '$DB_PASS';" 2>&1 | tail -2
               docker compose run --rm lifeos-app node scripts/migrate.mjs \
                 || { echo "❌ LifeOS migration failed — deploy stopped before the app restarted"; exit 1; }
               echo "✅ LifeOS migrations applied"
