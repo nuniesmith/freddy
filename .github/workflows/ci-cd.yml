@@ -414,6 +414,11 @@ jobs:
             # The app never auto-migrates; a schema change without this leaves
             # the new image talking to the old schema. Runs only when the
             # lifeos secrets are configured.
+            # Stop any orphaned lifeos containers from the old standalone deploy
+            # (~/lifeos/compose.prod.yml) that would hold port 8140.
+            echo "🧹 Cleaning up old lifeos stack..."
+            docker ps -q --filter "name=lifeos" | xargs -r docker stop 2>/dev/null || true
+            docker ps -aq --filter "name=lifeos-nginx" --filter "name=lifeos-app" --filter "name=lifeos-db" | xargs -r docker rm -f 2>/dev/null || true
             if grep -q "^POSTGRES_DB=.\+" .env 2>/dev/null; then
               echo "🗄️ Running LifeOS migrations..."
               cd "${{ env.PROJECT_PATH }}"
