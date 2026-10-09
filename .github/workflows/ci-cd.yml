@@ -44,7 +44,7 @@ permissions:
 
 env:
   SERVER_NAME: freddy
-  PROJECT_PATH: freddy
+  PROJECT_PATH: /home/actions/freddy
   DOMAIN: 7gram.xyz
 
 # A newer push used to CANCEL a deploy already running on the host, which can
@@ -91,6 +91,20 @@ jobs:
       # ======================================================================
       # DEPLOY VIA SSH
       # ======================================================================
+      # Bootstrap: ensure the project directory exists BEFORE the shared
+      # action's .env phase (which cds into it before pre-deploy runs).
+      - name: 📁 Bootstrap project directory
+        if: steps.tailscale.outputs.connected == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.FREDDY_TAILSCALE_IP }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USER || 'actions' }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            mkdir -p /home/actions/freddy
+            echo "✅ Project directory ready"
+
       - name: 🚀 Deploy via SSH
         id: deploy
         if: steps.tailscale.outputs.connected == 'true'
@@ -109,8 +123,8 @@ jobs:
 
             # Create project directory if it doesn't exist
             echo "📁 Ensuring project directory exists..."
-            mkdir -p $HOME/${{ env.PROJECT_PATH }}
-            cd $HOME/${{ env.PROJECT_PATH }}
+            mkdir -p ${{ env.PROJECT_PATH }}
+            cd ${{ env.PROJECT_PATH }}
 
             # Handle git repository setup
             if [ -d .git ] && git status >/dev/null 2>&1; then
@@ -124,9 +138,9 @@ jobs:
             else
               echo "📥 Cloning repository (first deployment)..."
               cd ~
-              rm -rf $HOME/${{ env.PROJECT_PATH }}
-              git clone https://github.com/${{ github.repository }}.git $HOME/${{ env.PROJECT_PATH }}
-              cd $HOME/${{ env.PROJECT_PATH }}
+              rm -rf ${{ env.PROJECT_PATH }}
+              git clone https://github.com/${{ github.repository }}.git ${{ env.PROJECT_PATH }}
+              cd ${{ env.PROJECT_PATH }}
               git checkout ${{ github.ref_name }}
             fi
 
@@ -390,7 +404,7 @@ jobs:
             GHCR_TOKEN="${{ secrets.GHCR_TOKEN || github.token }}"
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin 2>&1 | tail -1
             echo "📥 Pulling every image before stopping anything..."
-            if ! ( cd "$HOME/${{ env.PROJECT_PATH }}" && docker compose pull --quiet ); then
+            if ! ( cd "${{ env.PROJECT_PATH }}" && docker compose pull --quiet ); then
               echo "❌ Image pull failed -- the running stack was left untouched"
               exit 1
             fi
@@ -402,7 +416,7 @@ jobs:
             # lifeos secrets are configured.
             if grep -q "^POSTGRES_DB=.\+" .env 2>/dev/null; then
               echo "🗄️ Running LifeOS migrations..."
-              cd "$HOME/${{ env.PROJECT_PATH }}"
+              cd "${{ env.PROJECT_PATH }}"
               docker compose up -d lifeos-db
               docker compose run --rm lifeos-app node scripts/migrate.mjs \
                 || { echo "❌ LifeOS migration failed — deploy stopped before the app restarted"; exit 1; }
@@ -414,8 +428,8 @@ jobs:
 
             # Stop existing services to release file locks
             echo "🛑 Stopping existing services..."
-            if [ -d "$HOME/${{ env.PROJECT_PATH }}" ]; then
-              cd $HOME/${{ env.PROJECT_PATH }}
+            if [ -d "${{ env.PROJECT_PATH }}" ]; then
+              cd ${{ env.PROJECT_PATH }}
               ./run.sh stop 2>/dev/null || docker compose down 2>/dev/null || true
               cd ~
             fi
@@ -432,7 +446,7 @@ jobs:
             set -euo pipefail
 
             # Action already cd's to PROJECT_PATH; use absolute path as safeguard
-            cd $HOME/${{ env.PROJECT_PATH }}
+            cd ${{ env.PROJECT_PATH }}
 
             # Stop and remove existing containers + networks
             echo "🐳 Stopping existing services..."
@@ -456,7 +470,7 @@ jobs:
             echo "✅ Deployment complete"
 
           post-deploy-command: |
-            cd $HOME/${{ env.PROJECT_PATH }}
+            cd ${{ env.PROJECT_PATH }}
             echo ""
             echo "📊 Service Status:"
             docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker ps --format "table {{.Names}}\t{{.Status}}"
