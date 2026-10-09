@@ -257,6 +257,16 @@ jobs:
             upsert_env QBITTORRENT_USERNAME "${{ secrets.QBITTORRENT_USERNAME }}"
             upsert_env QBITTORRENT_PASSWORD "${{ secrets.QBITTORRENT_PASSWORD }}"
             upsert_env DISCORD_BOT_TOKEN "${{ secrets.DISCORD_BOT_TOKEN }}"
+            # LifeOS (moved here from the lifeos repo — runs on freddy).
+            # IMAGE defaults to :main in the compose file; pin via secret to roll back.
+            upsert_env LIFEOS_IMAGE "${{ secrets.LIFEOS_IMAGE }}"
+            upsert_env LIFEOS_ORIGIN "${{ secrets.LIFEOS_ORIGIN }}"
+            upsert_env POSTGRES_DB "${{ secrets.POSTGRES_DB }}"
+            upsert_env POSTGRES_USER "${{ secrets.POSTGRES_USER }}"
+            upsert_env POSTGRES_PASSWORD "${{ secrets.POSTGRES_PASSWORD }}"
+            upsert_env LIFEOS_DATABASE_URL "${{ secrets.LIFEOS_DATABASE_URL }}"
+            upsert_env LIFEOS_BIND_ADDR "${{ secrets.LIFEOS_BIND_ADDR }}"
+            upsert_env LIFEOS_BIND_PORT "${{ secrets.LIFEOS_BIND_PORT }}"
             upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
             upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
             # discordarr's movie, show and music requests go straight to these.
@@ -368,6 +378,22 @@ jobs:
               exit 1
             fi
             echo "✅ All images pulled"
+
+            # LifeOS database migrations — one-shot, before the app (re)starts.
+            # The app never auto-migrates; a schema change without this leaves
+            # the new image talking to the old schema. Runs only when the
+            # lifeos secrets are configured.
+            if grep -q "^POSTGRES_DB=.\+" .env 2>/dev/null; then
+              echo "🗄️ Running LifeOS migrations..."
+              cd "$HOME/${{ env.PROJECT_PATH }}"
+              docker compose up -d lifeos-db
+              docker compose run --rm lifeos-app node scripts/migrate.mjs \
+                || { echo "❌ LifeOS migration failed — deploy stopped before the app restarted"; exit 1; }
+              echo "✅ LifeOS migrations applied"
+              cd ~
+            else
+              echo "  · lifeos not configured — skipping migrations"
+            fi
 
             # Stop existing services to release file locks
             echo "🛑 Stopping existing services..."

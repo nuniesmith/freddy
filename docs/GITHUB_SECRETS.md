@@ -165,6 +165,32 @@ echo "✅ All secrets configured!"
 echo "⚠️  Save the generated passwords securely!"
 ```
 
+### LifeOS
+
+LifeOS moved here from the `nuniesmith/lifeos` repo (it runs on freddy).
+Copy the values from `/srv/lifeos/.env` on freddy — the database stays put,
+so the credentials must match what postgres already has.
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `LIFEOS_IMAGE` | App image tag (optional — defaults to `ghcr.io/nuniesmith/lifeos:main`) | `ghcr.io/nuniesmith/lifeos:main` |
+| `LIFEOS_ORIGIN` | Public origin (SvelteKit CSRF check) | `https://lifeos.7gram.xyz` |
+| `POSTGRES_DB` | Postgres database name | `lifeos` |
+| `POSTGRES_USER` | Postgres user | `lifeos` |
+| `POSTGRES_PASSWORD` | Postgres password | _(from /srv/lifeos/.env)_ |
+| `LIFEOS_DATABASE_URL` | App database URL | `postgresql://user:pass@lifeos-db:5432/lifeos?sslmode=disable` |
+| `LIFEOS_BIND_ADDR` | Tailscale address nginx binds on (optional) | `100.106.65.55` |
+| `LIFEOS_BIND_PORT` | Port nginx binds on (optional) | `8140` |
+
+```bash
+# LifeOS (copy from /srv/lifeos/.env on freddy)
+gh secret set LIFEOS_ORIGIN --body "https://lifeos.7gram.xyz"
+gh secret set POSTGRES_DB --body "lifeos"
+gh secret set POSTGRES_USER --body "lifeos"
+gh secret set POSTGRES_PASSWORD --body "your-existing-password"
+gh secret set LIFEOS_DATABASE_URL --body "postgresql://lifeos:your-existing-password@lifeos-db:5432/lifeos?sslmode=disable"
+```
+
 ## Related Documentation
 
 - [Deployment Notes](../DEPLOYMENT_NOTES.md)
