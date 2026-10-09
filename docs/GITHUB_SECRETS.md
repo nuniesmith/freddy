@@ -165,6 +165,21 @@ echo "✅ All secrets configured!"
 echo "⚠️  Save the generated passwords securely!"
 ```
 
+### GHCR Access (private images)
+
+The deploy logs into `ghcr.io` before pulling. `GITHUB_TOKEN` works if the
+package grants this repo read access (package Settings → Manage Actions
+access). Otherwise create a Personal Access Token (classic) with
+`read:packages` scope and add it as `GHCR_TOKEN`.
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `GHCR_TOKEN` | PAT with `read:packages` (optional — only if GITHUB_TOKEN can't pull) | `ghp_...` |
+
+To grant access: go to the package page (e.g.
+`https://github.com/nuniesmith/lifeos/pkgs/container/lifeos`) → Package
+settings → Manage Actions access → Add repository → `nuniesmith/freddy`.
+
 ### LifeOS
 
 LifeOS moved here from the `nuniesmith/lifeos` repo (it runs on freddy).

@@ -372,6 +372,12 @@ jobs:
             # was already down, and freddy sat empty for 17 minutes while this
             # workflow printed success. Pulling here fails the deploy with the
             # house still running.
+            # Authenticate to GHCR for private images (e.g. nuniesmith/lifeos).
+            # GITHUB_TOKEN works if the package grants this repo read access;
+            # otherwise use a PAT with read:packages as GHCR_TOKEN.
+            echo "🔐 Logging into GHCR..."
+            GHCR_TOKEN="${{ secrets.GHCR_TOKEN || github.token }}"
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin 2>&1 | tail -1
             echo "📥 Pulling every image before stopping anything..."
             if ! ( cd "$HOME/${{ env.PROJECT_PATH }}" && docker compose pull --quiet ); then
               echo "❌ Image pull failed -- the running stack was left untouched"
