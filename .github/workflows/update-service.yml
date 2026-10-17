@@ -10,7 +10,8 @@
 # named, and then proves the running containers are that commit. A green run on
 # its own has claimed success over dead services here before.
 #
-# A service repo's CI calls it after pushing its image, e.g. shelfmark:
+# A service repo's CI calls it after pushing its image (shelfmark, discordarr,
+# lifeos), e.g. shelfmark:
 #
 #   gh workflow run update-service.yml -R nuniesmith/freddy \
 #     -f image=ghcr.io/nuniesmith/shelfmark -f revision=<40-char sha> \
@@ -73,12 +74,13 @@ jobs:
           declare -A ALLOWED=(
             [ghcr.io/nuniesmith/shelfmark]="shelfmark-api shelfmark-worker"
             [ghcr.io/nuniesmith/discordarr]="discordarr"
+            [ghcr.io/nuniesmith/lifeos]="lifeos-app"
           )
           # Only containers that declare a healthcheck can be health-gated.
           # discordarr's is a heartbeat the bot writes only while it is logged
           # in to Discord (discordarr#2), so a bot that cannot connect fails
           # the rollout instead of passing as merely "running".
-          declare -A HAS_HEALTHCHECK=([shelfmark-api]=1 [shelfmark-worker]=1 [discordarr]=1)
+          declare -A HAS_HEALTHCHECK=([shelfmark-api]=1 [shelfmark-worker]=1 [discordarr]=1 [lifeos-app]=1)
 
           allowed="${ALLOWED[$IMAGE]:-}"
           if [ -z "$allowed" ]; then
@@ -135,14 +137,38 @@ jobs:
             REVISION='${{ steps.request.outputs.revision }}'
             SERVICES='${{ steps.request.outputs.services }}'
 
-            # Pull the commit, not `latest`: `latest` may already have moved on
-            # to a newer push, and "whatever latest is now" cannot be checked
-            # against anything. Compose tracks `latest`, so the exact revision
-            # is tagged as it locally; the next full deploy re-pulls the
-            # registry's `latest` and converges.
+            # A full deploy (ci-cd.yml) logs this account in to GHCR with a
+            # job token that dies with its job. Left behind, that stale login
+            # made every pull here fail with "denied: denied" from 2026-10-12,
+            # public images included. These images are public: pull them
+            # anonymously.
+            docker logout ghcr.io >/dev/null 2>&1 || true
+
+            # Pull the commit, not the moving tag: it may already have moved on
+            # to a newer push, and "whatever it is now" cannot be checked
+            # against anything. Compose tracks a tag (`latest`; LifeOS tracks
+            # `main`), so the exact revision is tagged as it locally; the next
+            # full deploy re-pulls the registry's tag and converges.
+            case "$IMAGE" in
+              ghcr.io/nuniesmith/lifeos) TRACK=main ;;
+              *) TRACK=latest ;;
+            esac
             docker pull "$IMAGE:$REVISION"
-            docker tag "$IMAGE:$REVISION" "$IMAGE:latest"
+            docker tag "$IMAGE:$REVISION" "$IMAGE:$TRACK"
             want=$(docker image inspect -f '{{.Id}}' "$IMAGE:$REVISION")
+
+            # LifeOS never migrates itself: a new image against the old schema
+            # breaks. Same one-shot the full deploy runs, with the new image,
+            # before the app is recreated; a failed migration stops here with
+            # the old app still serving.
+            case " $SERVICES " in
+              *" lifeos-app "*)
+                echo "🗄️ LifeOS migrations"
+                # -T and </dev/null: this script reaches freddy on bash's stdin,
+                # and `compose run` would otherwise read the rest of it.
+                docker compose run --rm --no-deps -T lifeos-app node scripts/migrate.mjs </dev/null
+                ;;
+            esac
 
             echo "🔄 Recreating: $SERVICES"
             docker compose up -d --no-deps $SERVICES
@@ -191,6 +217,12 @@ jobs:
             case " ${{ steps.request.outputs.services }} " in
               *" shelfmark-api "*)
                 docker exec shelfmark-api python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/readyz',timeout=5).read().decode())"
+                ;;
+            esac
+            # LifeOS's own readiness: the database answers and the schema is current.
+            case " ${{ steps.request.outputs.services }} " in
+              *" lifeos-app "*)
+                docker exec lifeos-app curl -fsS http://127.0.0.1:3000/api/health/ready
                 ;;
             esac
           fail-on-unhealthy: true

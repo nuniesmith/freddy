@@ -405,9 +405,14 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin 2>&1 | tail -1
             echo "📥 Pulling every image before stopping anything..."
             if ! ( cd "${{ env.PROJECT_PATH }}" && docker compose pull --quiet ); then
+              docker logout ghcr.io >/dev/null 2>&1 || true
               echo "❌ Image pull failed -- the running stack was left untouched"
               exit 1
             fi
+            # The login is only for this pull. Its token dies with this job, and
+            # a stale GHCR login left in the account made every later pull by
+            # update-service.yml fail with "denied: denied" (from 2026-10-12).
+            docker logout ghcr.io >/dev/null 2>&1 || true
             echo "✅ All images pulled"
 
             # LifeOS database migrations — one-shot, before the app (re)starts.
