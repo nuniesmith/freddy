@@ -598,6 +598,11 @@ services:
             SONARR_API_KEY: ${SONARR_API_KEY:-}
             LIDARR_URL: ${LIDARR_URL:-http://100.87.125.19:8686}
             LIDARR_API_KEY: ${LIDARR_API_KEY:-}
+            # /cleanup: Emby's watch history decides what is unwatched, and
+            # only these Discord user ids may delete (none set = nobody).
+            EMBY_URL: ${EMBY_URL:-http://100.87.125.19:8096}
+            EMBY_API_KEY: ${EMBY_API_KEY:-}
+            DISCORDARR_PURGE_USER_IDS: ${DISCORDARR_PURGE_USER_IDS:-}
         depends_on:
             shelfmark-api:
                 condition: service_healthy

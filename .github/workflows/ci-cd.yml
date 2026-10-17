@@ -298,6 +298,9 @@ jobs:
             upsert_env RADARR_API_KEY "${{ secrets.RADARR_API_KEY }}"
             upsert_env SONARR_API_KEY "${{ secrets.SONARR_API_KEY }}"
             upsert_env LIDARR_API_KEY "${{ secrets.LIDARR_API_KEY }}"
+            # discordarr's /cleanup: Emby watch history, and who may delete.
+            upsert_env EMBY_API_KEY "${{ secrets.EMBY_API_KEY }}"
+            upsert_env DISCORDARR_PURGE_USER_IDS "${{ secrets.DISCORDARR_PURGE_USER_IDS }}"
             # The WORKER posts pipeline results here, not the bot — a download
             # that finishes long after the Discord interaction expired has no
             # interaction left to reply to. Without this the whole unattended
