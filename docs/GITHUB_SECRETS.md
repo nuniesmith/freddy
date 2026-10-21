@@ -195,6 +195,10 @@ pin. `LIFEOS_DATABASE_URL` is always built locally from the DB parts.
 | `LIFEOS_IMAGE` | App image tag (pin to roll back) | `ghcr.io/nuniesmith/lifeos:main` |
 | `LIFEOS_BIND_ADDR` | Tailscale address nginx binds on | `100.106.65.55` |
 | `LIFEOS_BIND_PORT` | Port nginx binds on | `8140` |
+| `LIFEOS_SECRET_KEY` | Seals the CalDAV passwords calendar sync stores (32 bytes, base64). Kept in `.env` once generated; a new key means reconnecting every CalDAV calendar | _(random)_ |
+| `LIFEOS_GOOGLE_SA_FILE` | Google service-account key for calendar sync, as the app sees it. Put the file in `/srv/lifeos/secrets/`, readable by uid 1000, and name it here, e.g. `/run/secrets/lifeos/google-calendar.json` | _(blank: Google off)_ |
+| `LIFEOS_CALENDAR_SYNC_MINUTES` | How often calendars sync; `0` turns the timer off | `5` |
+| `LIFEOS_BACKUP_CHECK` | `on` makes readiness expect a recent LifeOS backup run | `off` |
 
 ## Related Documentation
 
