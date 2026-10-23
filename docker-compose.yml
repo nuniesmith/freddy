@@ -633,6 +633,11 @@ services:
             POSTGRES_DB: ${POSTGRES_DB}
             POSTGRES_USER: ${POSTGRES_USER}
             POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            # Read only when the data directory is empty, at a new cluster's
+            # first start. With page checksums a damaged page is an error when
+            # it is read, not a wrong answer. The 2026-10-09 cluster had none;
+            # on 2026-10-21 a damaged catalog index in it stopped a migration.
+            POSTGRES_INITDB_ARGS: --data-checksums
         volumes:
             - /srv/lifeos/data/postgres:/var/lib/postgresql/data
         # Tuned for a shared box, not copied from a larger deployment.
@@ -672,8 +677,22 @@ services:
             LIFEOS_WEATHER_LONGITUDE: ${LIFEOS_WEATHER_LONGITUDE:-}
             LIFEOS_WEATHER_LABEL: ${LIFEOS_WEATHER_LABEL:-Local forecast}
             LIFEOS_WEATHER_UNITS: ${LIFEOS_WEATHER_UNITS:-metric}
+            # Readiness counts "no backup recorded" as degraded. Only LifeOS's
+            # own backup script records one, and freddy doesn't run it (tier 1
+            # takes a best-effort dump), so the check is off unless .env says on.
+            LIFEOS_BACKUP_CHECK: ${LIFEOS_BACKUP_CHECK:-off}
+            # Calendar sync (docs/calendar-sync.md in the lifeos repo). The
+            # deploy generates LIFEOS_SECRET_KEY once and keeps it in .env; it
+            # seals the CalDAV passwords people enter. Google stays off until
+            # LIFEOS_GOOGLE_SA_FILE names a service-account key put in
+            # /srv/lifeos/secrets, e.g. /run/secrets/lifeos/google-calendar.json.
+            LIFEOS_SECRET_KEY: ${LIFEOS_SECRET_KEY:-}
+            LIFEOS_GOOGLE_SA_FILE: ${LIFEOS_GOOGLE_SA_FILE:-}
+            LIFEOS_CALENDAR_SYNC_MINUTES: ${LIFEOS_CALENDAR_SYNC_MINUTES:-}
         volumes:
             - /srv/lifeos/data/uploads:/srv/lifeos/data/uploads
+            # The key file must be readable by the app's uid 1000.
+            - /srv/lifeos/secrets:/run/secrets/lifeos:ro
         depends_on:
             lifeos-db:
                 condition: service_healthy

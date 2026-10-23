@@ -291,7 +291,14 @@ jobs:
             LIFEOS_DB_URL="postgresql://$(grep '^POSTGRES_USER=' .env | cut -d= -f2):$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2)@lifeos-db:5432/$(grep '^POSTGRES_DB=' .env | cut -d= -f2)?sslmode=disable"
             upsert_env LIFEOS_DATABASE_URL "$LIFEOS_DB_URL"
             upsert_env LIFEOS_BIND_ADDR "$(get_or_gen LIFEOS_BIND_ADDR '${{ secrets.LIFEOS_BIND_ADDR }}' '100.106.65.55')"
-            upsert_env LIFEOS_BIND_PORT "$(get_or_gen LIFEOS_BIND_PORT '${{ secrets.LIFEOS_BIND_PORT }}' '8140')" 
+            upsert_env LIFEOS_BIND_PORT "$(get_or_gen LIFEOS_BIND_PORT '${{ secrets.LIFEOS_BIND_PORT }}' '8140')"
+            # Calendar sync seals the CalDAV passwords people enter with this
+            # key. Generated once and kept, like the password above: a new key
+            # means everyone re-enters their CalDAV passwords.
+            upsert_env LIFEOS_SECRET_KEY "$(get_or_gen LIFEOS_SECRET_KEY '${{ secrets.LIFEOS_SECRET_KEY }}' "$(openssl rand -base64 32)")"
+            upsert_env LIFEOS_GOOGLE_SA_FILE "${{ secrets.LIFEOS_GOOGLE_SA_FILE }}"
+            upsert_env LIFEOS_CALENDAR_SYNC_MINUTES "${{ secrets.LIFEOS_CALENDAR_SYNC_MINUTES }}"
+            upsert_env LIFEOS_BACKUP_CHECK "${{ secrets.LIFEOS_BACKUP_CHECK }}"
             upsert_env SHELFMARK_DISCORD_GUILD_ID "${{ secrets.SHELFMARK_DISCORD_GUILD_ID }}"
             upsert_env SHELFMARK_DISCORD_ALLOWED_ROLE_IDS "${{ secrets.SHELFMARK_DISCORD_ALLOWED_ROLE_IDS }}"
             # discordarr's movie, show and music requests go straight to these.
