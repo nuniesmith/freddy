@@ -411,47 +411,21 @@ services:
                     memory: 512M
 
     # =============================================================================
-    # SHELFMARK - audiobook/ebook organiser, request API, and Discord bot
-    # =============================================================================
-    # Image is published by nuniesmith/shelfmark CI; this host does not build it.
-    #
-    # Port 8110 is published on all interfaces, matching audiobookshelf (13378)
-    # and the other services here. Princess reaches this host over Tailscale at
-    # 100.106.65.55, so a loopback-only bind would make shelfmark.7gram.xyz
-    # unroutable. 8080 is already Nextcloud's, which is why not that.
-    #
-    # Upstreams. Prowlarr and qBittorrent use their public 7gram names: Sullivan
-    # is a different Docker host, and Tailscale MagicDNS does NOT resolve inside
-    # a container (http://sullivan:9696 times out from here, measured), so a name
-    # that works means a Princess-published one.
-    #
-    # Audiobookshelf is the exception and deliberately uses the container name.
-    # It runs in this very Compose project, and abs.7gram.xyz would leave the
-    # machine, cross the internet to Princess in Toronto, and come back over
-    # Tailscale to reach a container on the same bridge. Measured from a
-    # container here: 0.0014s by container name, 0.138s via the public name —
-    # 100x, to talk to a neighbour. It also makes an internal call depend on
-    # Linode being up. Override AUDIOBOOKSHELF_URL if that is ever wanted.
-    #
-    # The user is actions:actions (1001:1001), not PUID/PGID, and not jordan.
-    # Deployment creates /mnt/1tb/shelfmark/data itself as actions:actions mode
-    # 755, so only uid 1001 can write it — an earlier attempt to run as
-    # jordan:actions crash-looped both containers on "unable to open database
-    # file". 1001 also reaches the other trees: it owns /mnt/1tb/ebooks, and
-    # /mnt/1tb/audiobooks is jordan:actions mode 2775 so the actions group
-    # carries write there. Verified against all four mounts:
-    #
-    #     as 1001:1001   /data OK   /incoming OK   /ebooks OK   /audiobooks OK
-    #     as 1000:1001   /data DENIED
-    #
-    # PUID/PGID on this host is 1000:1000, which reaches neither /data nor
-    # /mnt/1tb/ebooks, which is why these are separate variables.
-
-    shelfmark-api:
-        image: ghcr.io/nuniesmith/shelfmark:latest
-        container_name: shelfmark-api
+    # MANAGEARR - Discord media requests, book pipeline, cleanup, seed management
+    # ============================================================================
+    # One service replacing shelfmark-api, shelfmark-worker and discordarr
+    # (merged 2026-11-20 into nuniesmith/managearr). The supervisor in the
+    # image runs the books API, the books worker and the Discord bot as one
+    # process tree; the bot reaches the API on loopback inside the container.
+    # The shelfmark_* volumes are unchanged, so the job DB — and its
+    # reconciled_torrents ledger — carries over untouched.
+    managearr:
+        image: ghcr.io/nuniesmith/managearr:latest
+        container_name: managearr
         user: "${SHELFMARK_UID:-1001}:${SHELFMARK_GID:-1001}"
-        command: ["shelfmark-api"]
+        command: ["managearr-all"]
+        profiles:
+            - discord
         ports:
             - "8110:8000"
         volumes:
@@ -489,106 +463,10 @@ services:
             QBITTORRENT_URL: ${QBITTORRENT_URL:-https://qbt.7gram.xyz}
             QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
             QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
-        networks:
-            - freddy
-        restart: unless-stopped
-        logging: *default-logging
-        healthcheck:
-            test:
-                [
-                    "CMD-SHELL",
-                    "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)\" || exit 1",
-                ]
-            <<: *healthcheck-defaults
-            start_period: 20s
-        deploy:
-            resources:
-                limits:
-                    memory: 512M
-
-    shelfmark-worker:
-        image: ghcr.io/nuniesmith/shelfmark:latest
-        container_name: shelfmark-worker
-        user: "${SHELFMARK_UID:-1001}:${SHELFMARK_GID:-1001}"
-        command: ["shelfmark-worker"]
-        volumes:
-            - audiobookshelf_data:/audiobooks
-            - shelfmark_ebooks:/ebooks
-            - shelfmark_data:/data
-            - shelfmark_incoming:/incoming
-            - shelfmark_work:/work
-            - shelfmark_quarantine:/quarantine
-            - shelfmark_ssh:/run/secrets:ro
-        environment:
-            <<: *common-env
-            SHELFMARK_DB_PATH: /data/shelfmark.db
-            SHELFMARK_AUDIOBOOKS_ROOT: /audiobooks
-            SHELFMARK_EBOOKS_ROOT: /ebooks
-            SHELFMARK_INCOMING_ROOT: /incoming
-            SHELFMARK_WORK_ROOT: /work
-            SHELFMARK_QUARANTINE_ROOT: /quarantine
-            SULLIVAN_SSH_HOST: ${SULLIVAN_SSH_HOST:-100.87.125.19}
-            SULLIVAN_SSH_USER: ${SULLIVAN_SSH_USER:-shelfmark-sync}
-            SULLIVAN_SSH_IDENTITY_FILE: /run/secrets/id_ed25519
-            SULLIVAN_COMPLETED_ROOT: ${SULLIVAN_COMPLETED_ROOT:-/}
             SHELFMARK_WORKER_ID: freddy-shelfmark-worker
             # Where the worker announces a finished book and pages on a failed
-            # chain. Empty is safe: the notifier is best-effort and a missing
-            # URL simply means no notification, never a failed job.
             SHELFMARK_DISCORD_WEBHOOK_URL: ${SHELFMARK_DISCORD_WEBHOOK_URL:-}
-            AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-http://audiobookshelf:80}
-            AUDIOBOOKSHELF_API_TOKEN: ${AUDIOBOOKSHELF_API_TOKEN:-}
-            AUDIOBOOKSHELF_LIBRARY_ID: ${AUDIOBOOKSHELF_LIBRARY_ID:-}
-            PROWLARR_URL: ${PROWLARR_URL:-https://prowlarr.7gram.xyz}
-            PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
-            QBITTORRENT_URL: ${QBITTORRENT_URL:-https://qbt.7gram.xyz}
-            QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
-            QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
-        networks:
-            - freddy
-        restart: unless-stopped
-        logging: *default-logging
-        # The worker serves no HTTP, so this is not a curl probe (the image has
-        # no curl anyway). `shelfmark-worker-healthcheck` reads the same
-        # liveness classifier /readyz uses, so `docker ps` and the API can no
-        # longer disagree about whether the worker is alive.
-        #
-        # Without this the worker had NO healthcheck at all: it could die or
-        # wedge while `docker ps` showed it merely "Up", jobs queued silently,
-        # and nothing surfaced it. That is the whole failure this closes.
-        #
-        # start_period covers the first loop iteration writing its liveness row.
-        # The classifier reports a never-seen worker as "unknown" and exits 0
-        # rather than failing, so this is belt and braces, not load-bearing.
-        healthcheck:
-            test: ["CMD", "shelfmark-worker-healthcheck"]
-            <<: *healthcheck-defaults
-            start_period: 30s
-        deploy:
-            resources:
-                limits:
-                    memory: 512M
-
-    # discordarr (nuniesmith/discordarr): the household's ONE Discord bot. It
-    # took over shelfmark-bot's token and carries its book commands unchanged,
-    # talking to shelfmark-api exactly as that bot did, and adds /movie, /show,
-    # /music and /queue, which go straight to Radarr, Sonarr and Lidarr on
-    # sullivan over the tailnet. One token cannot drive two bots -- each would
-    # overwrite the other's slash commands -- so shelfmark-bot is gone, not
-    # merely stopped.
-    #
-    # Held behind a profile: the bot exits immediately without DISCORD_BOT_TOKEN,
-    # and `restart: unless-stopped` would turn that into a crash loop. The
-    # deploy turns the profile on whenever that secret is set (see ci-cd.yml).
-    discordarr:
-        image: ghcr.io/nuniesmith/discordarr:latest
-        container_name: discordarr
-        profiles:
-            - discord
-        environment:
-            <<: *common-env
-            SHELFMARK_API_URL: http://shelfmark-api:8000
-            SHELFMARK_API_TOKEN: ${SHELFMARK_API_TOKEN:-}
+            SHELFMARK_API_URL: http://127.0.0.1:8000
             DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
             SHELFMARK_DISCORD_GUILD_ID: ${SHELFMARK_DISCORD_GUILD_ID:-}
             SHELFMARK_DISCORD_ALLOWED_ROLE_IDS: ${SHELFMARK_DISCORD_ALLOWED_ROLE_IDS:-}
@@ -603,17 +481,19 @@ services:
             EMBY_URL: ${EMBY_URL:-http://100.87.125.19:8096}
             EMBY_API_KEY: ${EMBY_API_KEY:-}
             DISCORDARR_PURGE_USER_IDS: ${DISCORDARR_PURGE_USER_IDS:-}
-        depends_on:
-            shelfmark-api:
-                condition: service_healthy
         networks:
             - freddy
         restart: unless-stopped
         logging: *default-logging
+        healthcheck:
+            test: ["CMD", "managearr-healthcheck"]
+            <<: *healthcheck-defaults
+            start_period: 90s
         deploy:
             resources:
                 limits:
-                    memory: 256M
+                    memory: 768M
+
 
     # ==========================================================================
     # LIFEOS - Personal operating system (SvelteKit + PostgreSQL)
