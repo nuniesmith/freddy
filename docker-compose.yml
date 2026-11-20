@@ -463,6 +463,7 @@ services:
             QBITTORRENT_URL: ${QBITTORRENT_URL:-https://qbt.7gram.xyz}
             QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
             QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
+            QBITTORRENT_CATEGORY: ${QBITTORRENT_CATEGORY:-managearr}
             SHELFMARK_WORKER_ID: freddy-shelfmark-worker
             # Where the worker announces a finished book and pages on a failed
             SHELFMARK_DISCORD_WEBHOOK_URL: ${SHELFMARK_DISCORD_WEBHOOK_URL:-}
